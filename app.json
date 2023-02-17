@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "react-native-phash",
+    "slug": "react-native-phash",
+    "version": "0.1.0",
+    "description": "Generate perceptual hash of image by native ios libs",
+    "sdkVersion": "47.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ]
+  }
+}
