@@ -16,8 +16,8 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
-  s.dependency 'CocoaImageHashing'
-  s.dependency 'KDTree'
+  s.dependency 'CocoaImageHashing', '~> 1.7.0'
+  s.dependency 'KDTree', '~> 1.3.2'
 
   # Swift/Objective-C compatibility
   s.pod_target_xcconfig = {

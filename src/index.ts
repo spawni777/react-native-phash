@@ -1,44 +1,66 @@
 import ReactNativePhashModule from './ReactNativePhashModule';
 
-type AlgorithmName = "dHash" | "pHash" | "aHash";
+type HashAlgorithmName = "dHash" | "pHash" | "aHash";
 
 export async function getImagePerceptualHash(
   imageIds: string | string[],
-  algorithmName: AlgorithmName = "dHash"
+  hashAlgorithmName: HashAlgorithmName = "dHash"
 ): Promise<string[]> {
   if (imageIds?.length)
-    return ReactNativePhashModule.getPerceptualHashes(imageIds, algorithmName);
+    return ReactNativePhashModule.getPerceptualHashes(imageIds, hashAlgorithmName);
   else
     return ReactNativePhashModule.getPerceptualHashes(
       [imageIds],
-      algorithmName
+      hashAlgorithmName
     );
 }
 
 // GUESS IT DOESN'T WORK?????!!!!!
 export async function findSimilarImagesCocoaImageHashing(
   imageIds: string | string[],
-  algorithmName: AlgorithmName = "dHash"
+  hashAlgorithmName: HashAlgorithmName = "dHash"
 ): Promise<string[]> {
   if (imageIds?.length)
     return ReactNativePhashModule.findSimilarImagesCocoaImageHashing(
       imageIds,
-      algorithmName
+      hashAlgorithmName
     );
   else
     return ReactNativePhashModule.findSimilarImagesCocoaImageHashing(
       [imageIds],
-      algorithmName
+      hashAlgorithmName
     );
 }
 
 export async function findSimilarImages(
   imageIds: string | string[],
   maxHammingDistance: number = 5,
-  algorithmName: AlgorithmName = "dHash"
+  hashAlgorithmName: HashAlgorithmName = "dHash"
 ): Promise<[string, string][]> {
   if (imageIds?.length)
-    return ReactNativePhashModule.findSimilarImages(imageIds, maxHammingDistance, algorithmName);
+    return ReactNativePhashModule.findSimilarImages(imageIds, maxHammingDistance, hashAlgorithmName);
   else
-    return ReactNativePhashModule.findSimilarImages([imageIds], maxHammingDistance, algorithmName);
+    return ReactNativePhashModule.findSimilarImages([imageIds], maxHammingDistance, hashAlgorithmName);
+}
+
+export async function findSimilarImagesKDTree(
+  imageIds: string | string[],
+  maxHammingDistance: number = 5,
+  hashAlgorithmName: HashAlgorithmName = "dHash",
+  nearestK: number = 2
+): Promise<string[][]> {
+  if (imageIds?.length)
+    return ReactNativePhashModule.findSimilarImagesKDTree(
+      imageIds,
+      maxHammingDistance,
+      hashAlgorithmName,
+      nearestK
+    );
+  else
+    return ReactNativePhashModule.findSimilarImagesKDTree(
+      [imageIds],
+      maxHammingDistance,
+      hashAlgorithmName,
+      nearestK
+    );
 }

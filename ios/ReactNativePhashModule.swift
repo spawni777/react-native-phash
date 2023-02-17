@@ -13,8 +13,8 @@ class ImageObject {
   }
 }
 
-func calcHammingDistance(lhsData: OSHashType, rhsData: OSHashType, algorithmName: String) -> OSHashDistanceType {
-    switch algorithmName {
+func calcHammingDistance(lhsData: OSHashType, rhsData: OSHashType, hashAlgorithmName: String) -> OSHashDistanceType {
+    switch hashAlgorithmName {
       case "dHash":
           return OSImageHashing.sharedInstance().hashDistance(lhsData, to: rhsData, with: .dHash)
       case "pHash":
@@ -23,12 +23,24 @@ func calcHammingDistance(lhsData: OSHashType, rhsData: OSHashType, algorithmName
           return OSImageHashing.sharedInstance().hashDistance(lhsData, to: rhsData, with: .aHash)
     }
 }
+func calcHammingDistance(lhsData: [Double], rhsData: [Double]) -> Int {
+  var diff = 0;
 
-func calcPerceptualHashes(imageAppleIds: [String], algorithmName: String) -> [OSHashType?] {
+  for (i, _) in lhsData.enumerated() {
+    if (lhsData[i] != rhsData[i]) {
+      diff = diff + 1
+    }
+  }
+
+  return diff;
+}
+
+
+func calcPerceptualHashes(imageAppleIds: [String], hashAlgorithmName: String) -> [OSHashType?] {
   let imageHashing = OSImageHashing.sharedInstance()
 
-  func calcPerceptualHash(imageData: Data, algorithmName: String) -> OSHashType {
-    switch algorithmName {
+  func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
+    switch hashAlgorithmName {
       case "dHash":
           return imageHashing.hashImageData(imageData, with: .dHash)
       case "pHash":
@@ -38,7 +50,7 @@ func calcPerceptualHashes(imageAppleIds: [String], algorithmName: String) -> [OS
     }
   }
 
-  var dHashes: [OSHashType?] = []
+  var pHashes: [OSHashType?] = []
 
   let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
 
@@ -50,18 +62,18 @@ func calcPerceptualHashes(imageAppleIds: [String], algorithmName: String) -> [OS
     PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (imageData, dataUTI, orientation, info) in
         guard let imageData = imageData else {
             // handle error
-            dHashes.append(nil)
+            pHashes.append(nil)
             return
         }
 
         // process the image data
-        let dHash = calcPerceptualHash(imageData: imageData, algorithmName: algorithmName)
+        let pHash = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
 
-        dHashes.append(dHash)
+        pHashes.append(pHash)
     }
   }
 
-  return dHashes
+  return pHashes
 }
 
 public class ReactNativePhashModule: Module {
@@ -76,26 +88,26 @@ public class ReactNativePhashModule: Module {
 
     // Defines a JavaScript function that always returns a Promise and whose native code
     // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("getPerceptualHashes") { (imageAppleIds: [String], algorithmName: String) -> [String?] in
-        let dHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, algorithmName: algorithmName);
+    AsyncFunction("getPerceptualHashes") { (imageAppleIds: [String], hashAlgorithmName: String) -> [String?] in
+        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName);
 
-        var dHashesStrings: [String?] = []
+        var pHashesStrings: [String?] = []
 
-        for dHash in dHashes {
-          if (dHash == nil) {
-            dHashesStrings.append(nil);
+        for pHash in pHashes {
+          if (pHash == nil) {
+            pHashesStrings.append(nil);
             continue
           }
-          let binaryString = String(dHash!, radix: 2)
+          let binaryString = String(pHash!, radix: 2)
           let paddedBinaryString = binaryString.padding(toLength: 64, withPad: "0", startingAt: 0)
 
-          dHashesStrings.append(paddedBinaryString)
+          pHashesStrings.append(paddedBinaryString)
         }
 
-        return dHashesStrings
+        return pHashesStrings
     }
 
-    AsyncFunction("findSimilarImagesCocoaImageHashing") { (imageAppleIds: [String], algorithmName: String) -> [String] in
+    AsyncFunction("findSimilarImagesCocoaImageHashing") { (imageAppleIds: [String], hashAlgorithmName: String) -> [String] in
         let imageHashing = OSImageHashing.sharedInstance()
         var images: [ImageObject] = []
 
@@ -140,21 +152,21 @@ public class ReactNativePhashModule: Module {
         return result
     }
 
-    AsyncFunction("findSimilarImages") { (imageAppleIds: [String], maxHammingDistance: Int, algorithmName: String) -> [[String]] in
-        let dHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, algorithmName: algorithmName)
+    AsyncFunction("findSimilarImages") { (imageAppleIds: [String], maxHammingDistance: Int, hashAlgorithmName: String) -> [[String]] in
+        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName)
         var similarImages = [[String]]()
 
-        for i in 0..<dHashes.count - 1 {
-            guard let dHash1 = dHashes[i] else {
+        for i in 0..<pHashes.count - 1 {
+            guard let pHash1 = pHashes[i] else {
                 continue
             }
 
-            for j in (i + 1)..<dHashes.count {
-                guard let dHash2 = dHashes[j], i < j else {
+            for j in (i + 1)..<pHashes.count {
+                guard let pHash2 = pHashes[j], i < j else {
                     continue
                 }
 
-                let hammingDistance = calcHammingDistance(lhsData: dHash1 as OSHashType, rhsData: dHash2 as OSHashType, algorithmName: algorithmName)
+                let hammingDistance = calcHammingDistance(lhsData: pHash1 as OSHashType, rhsData: pHash2 as OSHashType, hashAlgorithmName: hashAlgorithmName)
                 if hammingDistance <= maxHammingDistance {
                     similarImages.append([imageAppleIds[i], imageAppleIds[j]])
                 }
@@ -164,18 +176,69 @@ public class ReactNativePhashModule: Module {
         return similarImages
     }
 
-    AsyncFunction("findSimilarImagesKDTree") { (imageAppleIds: [String], maxHammingDistance: Int, algorithmName: String) -> [[String]] in
-        let dHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, algorithmName: algorithmName)
-        let kdTree = KDTree<Double>(values: dHashes, dimensions: dHashes[0].count)
-        var similarImages = [[String]]()
+    AsyncFunction("findSimilarImagesKDTree") { (imageAppleIds: [String], maxHammingDistance: Int, hashAlgorithmName: String, nearestK: Int) -> [[String]] in
+        struct Point64D: KDTreePoint {
+            static var dimensions: Int { 64 }
+            var coordinates: [Double]
+            var appleId: String
 
-        for (i, dHash1) in dHashes.enumerated() {
-            let nearestNeighbors = kdTree.findNeighbors(of: dHash1, maxCount: 4, distance: euclideanDistance)
-            let filteredNeighbors = nearestNeighbors.filter { $0.index > i && $0.distance <= Double(maxHammingDistance) }
-
-            for neighbor in filteredNeighbors {
-                similarImages.append([imageAppleIds[i], imageAppleIds[neighbor.index]])
+            func kdDimension(_ dimension: Int) -> Double {
+                return coordinates[dimension]
             }
+
+            func squaredDistance(to otherPoint: Point64D) -> Double {
+                let squaredDifferences = zip(coordinates, otherPoint.coordinates).map { (a, b) in (a - b) * (a - b) }
+                let sumOfSquaredDifferences = squaredDifferences.reduce(0, +)
+                return sqrt(sumOfSquaredDifferences)
+            }
+        }
+
+        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName)
+        var points64D = [Point64D]()
+
+        for (index, pHash) in pHashes.enumerated() {
+          if (pHash == nil) {
+            continue
+          }
+          let binaryString = String(pHash!, radix: 2).replacingOccurrences(of: "-", with: "")
+          let paddedBinaryString = binaryString.padding(toLength: 64, withPad: "0", startingAt: 0)
+          let binaryStringArray = paddedBinaryString.map { String($0) }
+          let doubleArray = binaryStringArray.map { Double($0) ?? 0 }
+
+          points64D.append(Point64D(coordinates: doubleArray, appleId: imageAppleIds[index]))
+        }
+
+        let kdTree: KDTree<Point64D> = KDTree(values: points64D)
+        var similarImages = [[String]]()
+        var foundSimilarityIdsHashMap = [String: Int]()
+
+        for point in points64D {
+          if let val = foundSimilarityIdsHashMap[point.appleId] {
+              continue
+          }
+          foundSimilarityIdsHashMap[point.appleId] = 1;
+
+          let nearestPoints: [Point64D] = kdTree.nearestK(nearestK, to: point)
+          var collisions: [String] = [point.appleId]
+
+          for neighbor in nearestPoints {
+            if let val = foundSimilarityIdsHashMap[neighbor.appleId] {
+                continue
+            }
+
+            let hammingDistance = calcHammingDistance(lhsData: neighbor.coordinates, rhsData: point.coordinates)
+
+            if (hammingDistance > maxHammingDistance) {
+              continue
+            }
+
+            foundSimilarityIdsHashMap[neighbor.appleId] = 1
+            collisions.append(neighbor.appleId)
+          }
+
+          if (collisions.count >= 2) {
+            similarImages.append(collisions)
+          }
         }
 
         return similarImages

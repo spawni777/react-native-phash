@@ -2,7 +2,7 @@ import * as MediaLibrary from "expo-media-library";
 import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 // import * as ReactNativePhash from "react-native-phash";
-import { getImagePerceptualHash, findSimilarImages } from "react-native-phash";
+import { getImagePerceptualHash, findSimilarImages, findSimilarImagesKDTree } from "react-native-phash";
 
 let images: MediaLibrary.Asset[];
 
@@ -21,7 +21,12 @@ export default function App() {
       // const libPath = getAssetsLibraryPath('jpg', assets[0].id);
       // console.log(libPath);
 
-      const result = await findSimilarImages(assets.map((asset) => asset.id), 5);
+      const result = await findSimilarImagesKDTree(
+        assets.map((asset) => asset.id),
+        15,
+        'dHash',
+        5
+      );
 
       console.log(JSON.stringify(result, null, 2));
 
