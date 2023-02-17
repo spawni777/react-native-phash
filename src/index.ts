@@ -1,6 +1,14 @@
 import ReactNativePhashModule from './ReactNativePhashModule';
 
-type HashAlgorithmName = "dHash" | "pHash" | "aHash";
+type Enumerate<N extends number, Acc extends number[] = []> = Acc["length"] extends N
+  ? Acc[number]
+  : Enumerate<N, [...Acc, Acc["length"]]>;
+
+type Range<F extends number, T extends number> = Exclude<Enumerate<T>, Enumerate<F>>;
+
+export type NearestK = Range<2, 100>;
+export type MaxHammingDistance = Range<1, 64>;
+export type HashAlgorithmName = "dHash" | "pHash" | "aHash";
 
 export async function getImagePerceptualHash(
   imageIds: string | string[],
@@ -34,7 +42,7 @@ export async function findSimilarImagesCocoaImageHashing(
 
 export async function findSimilarImages(
   imageIds: string | string[],
-  maxHammingDistance: number = 5,
+  maxHammingDistance: MaxHammingDistance = 5,
   hashAlgorithmName: HashAlgorithmName = "dHash"
 ): Promise<[string, string][]> {
   if (imageIds?.length)
@@ -45,9 +53,9 @@ export async function findSimilarImages(
 
 export async function findSimilarImagesKDTree(
   imageIds: string | string[],
-  maxHammingDistance: number = 5,
+  maxHammingDistance: MaxHammingDistance = 5,
   hashAlgorithmName: HashAlgorithmName = "dHash",
-  nearestK: number = 2
+  nearestK: NearestK = 2
 ): Promise<string[][]> {
   if (imageIds?.length)
     return ReactNativePhashModule.findSimilarImagesKDTree(

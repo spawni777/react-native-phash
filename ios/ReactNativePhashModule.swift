@@ -54,6 +54,8 @@ func calcPerceptualHashes(imageAppleIds: [String], hashAlgorithmName: String) ->
 
   let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
 
+  sendEvent("PHAssets-fetched", [])
+
   fetchResult.enumerateObjects{  (asset, count, stop) in
     // assuming you have a `PHAsset` instance called `asset`:
     let options = PHImageRequestOptions()
@@ -70,6 +72,10 @@ func calcPerceptualHashes(imageAppleIds: [String], hashAlgorithmName: String) ->
         let pHash = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
 
         pHashes.append(pHash)
+        sendEvent("pHash-calculated", [
+          "finished": count + 1,
+          "total": imageAppleIds.count
+        ])
     }
   }
 
@@ -85,6 +91,8 @@ public class ReactNativePhashModule: Module {
     // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
     // The module will be accessible from `requireNativeModule('ReactNativePhash')` in JavaScript.
     Name("ReactNativePhash")
+
+    Events("PHAssets-fetched", "pHash-calculated", "KDTree-generation-start", "KDTree-generation-end", "find-similar-iteration")
 
     // Defines a JavaScript function that always returns a Promise and whose native code
     // is by default dispatched on the different thread than the JavaScript runtime runs on.
@@ -171,6 +179,11 @@ public class ReactNativePhashModule: Module {
                     similarImages.append([imageAppleIds[i], imageAppleIds[j]])
                 }
             }
+
+            sendEvent("find-similar-iteration", [
+              "finished": i + 1,
+              "total": pHashes.count
+            ])
         }
 
         return similarImages
@@ -196,6 +209,8 @@ public class ReactNativePhashModule: Module {
         let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName)
         var points64D = [Point64D]()
 
+        sendEvent("KDTree-generation-start", [])
+
         for (index, pHash) in pHashes.enumerated() {
           if (pHash == nil) {
             continue
@@ -209,10 +224,11 @@ public class ReactNativePhashModule: Module {
         }
 
         let kdTree: KDTree<Point64D> = KDTree(values: points64D)
+        sendEvent("KDTree-generation-end", [])
         var similarImages = [[String]]()
         var foundSimilarityIdsHashMap = [String: Int]()
 
-        for point in points64D {
+        for (pointIndex, point) in points64D.enumerated() {
           if let val = foundSimilarityIdsHashMap[point.appleId] {
               continue
           }
@@ -239,6 +255,11 @@ public class ReactNativePhashModule: Module {
           if (collisions.count >= 2) {
             similarImages.append(collisions)
           }
+
+          sendEvent("find-similar-iteration", [
+            "finished": pointIndex + 1,
+            "total": points64D.count
+          ])
         }
 
         return similarImages
