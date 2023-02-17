@@ -2,7 +2,7 @@ import * as MediaLibrary from "expo-media-library";
 import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 // import * as ReactNativePhash from "react-native-phash";
-import { getImagePerceptualHash, findSimilarImages, findSimilarImagesKDTree } from "react-native-phash";
+import { getImagePerceptualHash, findSimilarImages, findSimilarImagesKDTree, addListener } from "react-native-phash";
 
 let images: MediaLibrary.Asset[];
 
@@ -18,14 +18,27 @@ export default function App() {
       const fileExtension = assets[0].filename.split('.')[1];
       console.log(JSON.stringify(assets[0], null, 2));
 
+      addListener('find-similar-iteration', ({finished}) => {
+        console.log('find-similar-iteration', finished);
+      });
+      addListener('KDTree-generation-start', ({}) => {
+        console.log('KDTree-generation-start');
+      });
+      addListener('KDTree-generation-end', () => {
+        console.log('KDTree-generation-end');
+      });
+      addListener('pHash-calculated', ({finished}) => {
+        console.log('pHash-calculated', finished);
+      });
+
       // const libPath = getAssetsLibraryPath('jpg', assets[0].id);
       // console.log(libPath);
 
       const result = await findSimilarImagesKDTree(
         assets.map((asset) => asset.id),
-        15,
+        5,
         'dHash',
-        5
+        2
       );
 
       console.log(JSON.stringify(result, null, 2));

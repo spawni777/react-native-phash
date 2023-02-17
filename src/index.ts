@@ -1,6 +1,11 @@
+import { EventEmitter, Subscription } from 'expo-modules-core';
+
 import ReactNativePhashModule from './ReactNativePhashModule';
 
-type Enumerate<N extends number, Acc extends number[] = []> = Acc["length"] extends N
+type Enumerate<
+  N extends number,
+  Acc extends number[] = []
+> = Acc["length"] extends N
   ? Acc[number]
   : Enumerate<N, [...Acc, Acc["length"]]>;
 
@@ -9,6 +14,27 @@ type Range<F extends number, T extends number> = Exclude<Enumerate<T>, Enumerate
 export type NearestK = Range<2, 100>;
 export type MaxHammingDistance = Range<1, 64>;
 export type HashAlgorithmName = "dHash" | "pHash" | "aHash";
+
+const emitter = new EventEmitter(ReactNativePhashModule);
+
+type EventNameWithoutPayload =
+  | "PHAssets-fetched"
+  | "KDTree-generation-start"
+  | "KDTree-generation-end";
+type EventNameWithPayload = "pHash-calculated" | "find-similar-iteration";
+type EventName = EventNameWithPayload | EventNameWithoutPayload;
+
+type PHashEvent = {
+  finished?: number;
+  total?: number;
+};
+
+export function addListener(
+  eventName: EventName,
+  listener: (event: PHashEvent) => void
+): Subscription {
+  return emitter.addListener<PHashEvent>(eventName, listener);
+}
 
 export async function getImagePerceptualHash(
   imageIds: string | string[],
