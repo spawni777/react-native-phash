@@ -1,6 +1,6 @@
-import { EventEmitter, Subscription } from 'expo-modules-core';
+import { EventEmitter, Subscription } from "expo-modules-core";
 
-import ReactNativePhashModule from './ReactNativePhashModule';
+import ReactNativePhashModule from "./ReactNativePhashModule";
 
 type Enumerate<
   N extends number,
@@ -9,7 +9,10 @@ type Enumerate<
   ? Acc[number]
   : Enumerate<N, [...Acc, Acc["length"]]>;
 
-type Range<F extends number, T extends number> = Exclude<Enumerate<T>, Enumerate<F>>;
+type Range<F extends number, T extends number> = Exclude<
+  Enumerate<T>,
+  Enumerate<F>
+>;
 
 export type NearestK = Range<2, 100>;
 export type MaxHammingDistance = Range<1, 64>;
@@ -17,23 +20,31 @@ export type HashAlgorithmName = "dHash" | "pHash" | "aHash";
 
 const emitter = new EventEmitter(ReactNativePhashModule);
 
-type EventNameWithoutPayload =
+type EventNameEnum =
   | "PHAssets-fetched"
   | "KDTree-generation-start"
-  | "KDTree-generation-end";
-type EventNameWithPayload = "pHash-calculated" | "find-similar-iteration";
-type EventName = EventNameWithPayload | EventNameWithoutPayload;
+  | "KDTree-generation-end"
+  | "pHash-calculated"
+  | "find-similar-iteration";
 
 type PHashEvent = {
-  finished?: number;
-  total?: number;
+  finished: number;
+  total: number;
 };
 
-export function addListener(
-  eventName: EventName,
-  listener: (event: PHashEvent) => void
+type ReturnEventMap = {
+  "PHAssets-fetched": object;
+  "KDTree-generation-start": object;
+  "KDTree-generation-end": object;
+  "pHash-calculated": PHashEvent;
+  "find-similar-iteration": PHashEvent;
+};
+
+export function addListener<T extends EventNameEnum>(
+  eventName: T,
+  listener: (event: ReturnEventMap[T]) => void
 ): Subscription {
-  return emitter.addListener<PHashEvent>(eventName, listener);
+  return emitter.addListener<ReturnEventMap[T]>(eventName, listener);
 }
 
 export async function getImagePerceptualHash(

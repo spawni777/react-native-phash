@@ -21,7 +21,7 @@ export default function App() {
       addListener('find-similar-iteration', ({finished}) => {
         console.log('find-similar-iteration', finished);
       });
-      addListener('KDTree-generation-start', ({}) => {
+      addListener("KDTree-generation-start", () => {
         console.log('KDTree-generation-start');
       });
       addListener('KDTree-generation-end', () => {
