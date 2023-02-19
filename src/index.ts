@@ -1,6 +1,7 @@
 import { EventEmitter, Subscription } from "expo-modules-core";
 
 import ReactNativePhashModule from "./ReactNativePhashModule";
+import { Platform } from "react-native";
 
 type Enumerate<
   N extends number,
@@ -14,18 +15,11 @@ type Range<F extends number, T extends number> = Exclude<
   Enumerate<F>
 >;
 
-export type NearestK = Range<2, 100>;
+export type NearestK = Range<1, 100>;
 export type MaxHammingDistance = Range<1, 64>;
 export type HashAlgorithmName = "dHash" | "pHash" | "aHash";
 
-const emitter = new EventEmitter(ReactNativePhashModule);
-
-type EventNameEnum =
-  | "PHAssets-fetched"
-  | "KDTree-generation-start"
-  | "KDTree-generation-end"
-  | "pHash-calculated"
-  | "find-similar-iteration";
+type EventNameEnum = "pHash-calculated" | "find-similar-iteration";
 
 type PHashEvent = {
   finished: number;
@@ -33,79 +27,113 @@ type PHashEvent = {
 };
 
 type ReturnEventMap = {
-  "PHAssets-fetched": object;
-  "KDTree-generation-start": object;
-  "KDTree-generation-end": object;
   "pHash-calculated": PHashEvent;
   "find-similar-iteration": PHashEvent;
 };
 
+function makeId(length) {
+  let result = "";
+  const characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const charactersLength = characters.length;
+  let counter = 0;
+  while (counter < length) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    counter += 1;
+  }
+  return result;
+}
+
+const emitter = new EventEmitter(ReactNativePhashModule);
+// add clear listeners to remove warnings
+emitter.addListener<"pHash-calculated">("pHash-calculated", () => {});
+emitter.addListener<"pHash-calculated">("find-similar-iteration", () => {});
+
+export const subscriptions: { [key: string]: Subscription } = {};
 export function addListener<T extends EventNameEnum>(
   eventName: T,
-  listener: (event: ReturnEventMap[T]) => void
+  listener: (event: ReturnEventMap[T]) => void,
+  listenerId: string = makeId(10)
 ): Subscription {
-  return emitter.addListener<ReturnEventMap[T]>(eventName, listener);
+  const subscription = emitter.addListener<ReturnEventMap[T]>(eventName, listener);
+
+  subscriptions[listenerId] = subscription;
+  return subscription;
 }
 
-export async function getImagePerceptualHash(
+export type PHashOptions = {
+  hashAlgorithmName?: HashAlgorithmName;
+  maxCacheSize?: number;
+  storageIdentifier?: string;
+};
+
+export async function getImagesPerceptualHashes(
   imageIds: string | string[],
-  hashAlgorithmName: HashAlgorithmName = "dHash"
+  {
+    hashAlgorithmName = "dHash",
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+  }: PHashOptions = {}
 ): Promise<string[]> {
-  if (imageIds?.length)
-    return ReactNativePhashModule.getPerceptualHashes(imageIds, hashAlgorithmName);
-  else
-    return ReactNativePhashModule.getPerceptualHashes(
-      [imageIds],
-      hashAlgorithmName
-    );
+  const appleIds = imageIds.length ? imageIds : [imageIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.getPerceptualHashes(
+    appleIds,
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier
+  );
 }
 
-// GUESS IT DOESN'T WORK?????!!!!!
-export async function findSimilarImagesCocoaImageHashing(
-  imageIds: string | string[],
-  hashAlgorithmName: HashAlgorithmName = "dHash"
-): Promise<string[]> {
-  if (imageIds?.length)
-    return ReactNativePhashModule.findSimilarImagesCocoaImageHashing(
-      imageIds,
-      hashAlgorithmName
-    );
-  else
-    return ReactNativePhashModule.findSimilarImagesCocoaImageHashing(
-      [imageIds],
-      hashAlgorithmName
-    );
-}
+export type FindSimilarImagesOptions = PHashOptions & {
+  maxHammingDistance?: MaxHammingDistance;
+};
 
 export async function findSimilarImages(
   imageIds: string | string[],
-  maxHammingDistance: MaxHammingDistance = 5,
-  hashAlgorithmName: HashAlgorithmName = "dHash"
+  {
+    hashAlgorithmName = "dHash",
+    maxHammingDistance = 5,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+  }: FindSimilarImagesOptions = {}
 ): Promise<[string, string][]> {
-  if (imageIds?.length)
-    return ReactNativePhashModule.findSimilarImages(imageIds, maxHammingDistance, hashAlgorithmName);
-  else
-    return ReactNativePhashModule.findSimilarImages([imageIds], maxHammingDistance, hashAlgorithmName);
+  const appleIds = imageIds?.length ? imageIds : [imageIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.findSimilarImages(
+    appleIds,
+    maxHammingDistance,
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier
+  );
 }
+
+type FindSimilarImagesKDTreeOptions = FindSimilarImagesOptions & {
+  nearestK?: NearestK;
+};
 
 export async function findSimilarImagesKDTree(
   imageIds: string | string[],
-  maxHammingDistance: MaxHammingDistance = 5,
-  hashAlgorithmName: HashAlgorithmName = "dHash",
-  nearestK: NearestK = 2
+  {
+    maxHammingDistance = 5,
+    hashAlgorithmName = "dHash",
+    nearestK = 2,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+  }: FindSimilarImagesKDTreeOptions = {}
 ): Promise<string[][]> {
-  if (imageIds?.length)
-    return ReactNativePhashModule.findSimilarImagesKDTree(
-      imageIds,
-      maxHammingDistance,
-      hashAlgorithmName,
-      nearestK
-    );
-  else
-    return ReactNativePhashModule.findSimilarImagesKDTree(
-      [imageIds],
-      maxHammingDistance,
-      hashAlgorithmName,
-      nearestK
-    );
+  const appleIds = imageIds?.length ? imageIds : [imageIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.findSimilarImagesKDTree(
+    appleIds,
+    maxHammingDistance,
+    hashAlgorithmName,
+    nearestK,
+    maxCacheSize,
+    storageIdentifier
+  );
 }
