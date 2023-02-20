@@ -1,6 +1,6 @@
 import * as MediaLibrary from "expo-media-library";
 import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Button, StyleSheet, Text, View } from "react-native";
 // import * as ReactNativePhash from "react-native-phash";
 import {
   findSimilarImagesKDTree,
@@ -32,35 +32,66 @@ const findSimilarIterationSubscription = addListener(
   }
 );
 
+const calcAndLog1 = async () => {
+  const { assets } = await MediaLibrary.getAssetsAsync({
+    first: 1000,
+    mediaType: "photo",
+  });
+
+  const imagesPerceptualHashes = await getImagesPerceptualHashes(
+    assets.map((asset) => asset.id),
+    {
+      maxCacheSize: 0,
+    }
+  );
+  console.log(JSON.stringify(imagesPerceptualHashes, null, 2));
+  console.log(imagesPerceptualHashes.length);
+};
+
+const calcAndLog2 = async () => {
+  const { assets } = await MediaLibrary.getAssetsAsync({
+    first: 1000,
+    mediaType: "photo",
+  });
+
+  const similarImages = await findSimilarImages(
+    assets.map((asset) => asset.id),
+    {
+      maxCacheSize: 0,
+    }
+  );
+  console.log(JSON.stringify(similarImages, null, 2));
+};
+
+const calcAndLog3 = async () => {
+  const { assets } = await MediaLibrary.getAssetsAsync({
+    first: 1000,
+    mediaType: "photo",
+  });
+
+  const similarImagesKDTree = await findSimilarImagesKDTree(
+    assets.map((asset) => asset.id),
+    { maxCacheSize: 0 }
+  );
+  console.log(JSON.stringify(similarImagesKDTree, null, 2));
+};
+
 export default function App() {
   useEffect(() => {
     (async () => {
       const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") return;
-
-      const { assets } = await MediaLibrary.getAssetsAsync({ first: 100 });
-
-      const imagesPerceptualHashes = await getImagesPerceptualHashes(
-        assets.map((asset) => asset.id)
-      );
-      console.log(JSON.stringify(imagesPerceptualHashes, null, 2));
-
-      // const similarImages = await findSimilarImages(
-      //   assets.map((asset) => asset.id)
-      // );
-      // console.log(JSON.stringify(similarImages, null, 2));
-
-      // const similarImagesKDTree = await findSimilarImagesKDTree(
-      //   assets.map((asset) => asset.id),
-      //   { maxCacheSize: 0 }
-      // );
-      // console.log(JSON.stringify(similarImagesKDTree, null, 2));
+      if (status !== "granted") {
+        console.log('GRANT PERMISSIONS!');
+      }
     })();
   }, []);
 
   return (
     <View style={styles.container}>
       <Text>Hello there!</Text>
+      <Button title={"Hash"} onPress={calcAndLog1}/>
+      <Button title={"similar"} onPress={calcAndLog2}/>
+      <Button title={"similarKDTree"} onPress={calcAndLog3}/>
     </View>
   );
 }

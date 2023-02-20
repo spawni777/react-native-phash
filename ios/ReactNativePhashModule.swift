@@ -3,6 +3,26 @@ import CocoaImageHashing
 import Photos
 import KDTree
 
+let imageHashing = OSImageHashing.sharedInstance()
+
+class LimitedConcurrencyQueue {
+    let queue: DispatchQueue
+    let semaphore: DispatchSemaphore
+
+    init(label: String, maxConcurrent: Int) {
+        queue = DispatchQueue(label: label, qos: .userInitiated, attributes: .concurrent)
+        semaphore = DispatchSemaphore(value: maxConcurrent)
+    }
+
+    func async(_ block: @escaping () -> Void) {
+        queue.async {
+            self.semaphore.wait()
+            block()
+            self.semaphore.signal()
+        }
+    }
+}
+
 class ImageObject {
   var data: Data
   var appleId: String
@@ -79,16 +99,6 @@ class ImagePHashCache {
     }
 }
 
-func calcHammingDistance(lhsData: OSHashType, rhsData: OSHashType, hashAlgorithmName: String) -> OSHashDistanceType {
-    switch hashAlgorithmName {
-      case "dHash":
-          return OSImageHashing.sharedInstance().hashDistance(lhsData, to: rhsData, with: .dHash)
-      case "pHash":
-          return OSImageHashing.sharedInstance().hashDistance(lhsData, to: rhsData, with: .pHash)
-      default:
-          return OSImageHashing.sharedInstance().hashDistance(lhsData, to: rhsData, with: .aHash)
-    }
-}
 func calcHammingDistance(lhsData: [Double], rhsData: [Double]) -> Int {
   var diff = 0;
 
@@ -106,9 +116,8 @@ public class ReactNativePhashModule: Module {
   // Each module class must implement the definition function. The definition consists of components
   // that describes the module's functionality and behavior.
   // See https://docs.expo.dev/modules/module-api for more details about available components.
-  func calcPerceptualHashes(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String) -> [String?] {
+  func calcPerceptualHashes(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, concurrentBatchSize: Int, maxConcurrent: Int) -> [String?] {
     let cache = ImagePHashCache(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
-    let imageHashing = OSImageHashing.sharedInstance()
 
     func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
         switch hashAlgorithmName {
@@ -126,64 +135,81 @@ public class ReactNativePhashModule: Module {
     let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
 
     // Create a concurrent queue to perform the expensive task of calculating the perceptual hash of each image
-    let queue = DispatchQueue(label: "spawni.imageProcessingQueue", qos: .userInitiated, attributes: .concurrent)
+    let queue = LimitedConcurrencyQueue(label: "spawni.imageProcessingQueue", maxConcurrent: maxConcurrent)
 
     // Use DispatchGroup to keep track of the completion of all the image processing tasks
-    let group = DispatchGroup()
+    let pHashGroup = DispatchGroup()
 
+    let totalImageCount = imageAppleIds.count
+    var finishedImageCount = 0
+
+    // batchCount rounded up
+    let batchCount = (totalImageCount - 1 + concurrentBatchSize) / concurrentBatchSize
 
     self.sendEvent("pHash-calculated", [
-        "finished": pHashes.count,
+        "finished": 0,
         "total": imageAppleIds.count
     ])
-    fetchResult.enumerateObjects{  (asset, count, stop) in
-        group.enter() // enter DispatchGroup
+    for batchIndex in 0..<batchCount {
+        let batchStartIndex = batchIndex * concurrentBatchSize
+        let batchEndIndex = min((batchIndex + 1) * concurrentBatchSize, totalImageCount)
+        let assets = fetchResult.objects(at: IndexSet(integersIn: batchStartIndex..<batchEndIndex))
 
-        // assuming you have a `PHAsset` instance called `asset`:
-        let options = PHImageRequestOptions()
-        options.isSynchronous = true // allow the result to be returned asynchronously
+        // process the image data asynchronously on the concurrent queue
+        queue.async() {
+            for (count, asset) in assets.enumerated() {
+                pHashGroup.enter()
+                // assuming you have a `PHAsset` instance called `asset`:
+                let options = PHImageRequestOptions()
+                options.deliveryMode = .fastFormat
+                options.isSynchronous = false // allow the result to be returned asynchronously
 
-        PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (imageData, dataUTI, orientation, info) in
-            guard let imageData = imageData else {
-                // handle error
-                // append the pHash and the index of the corresponding asset to the pHashes array
-                let tuple: (index: Int, hash: String?) = (index: count, hash: nil)
-                pHashes.append(tuple)
-                // leave DispatchGroup
-                group.leave()
-                return
-            }
+                PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (imageData, dataUTI, orientation, info) in
+                    guard let imageData = imageData else {
+                        // handle error
+                        // append the pHash and the index of the corresponding asset to the pHashes array
+                        let tuple: (index: Int, hash: String?) = (index: count, hash: nil)
+                        pHashes.append(tuple)
 
-            // process the image data asynchronously on the concurrent queue
-            queue.async(group: group) {
-                let cacheKey = "\(asset.localIdentifier)_\(hashAlgorithmName)"
-                var pHash: String
+						pHashGroup.leave()
 
-                if let cachedHash = cache.get(for: cacheKey) {
-                    pHash = cachedHash
-                } else {
-                    let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
-                    let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
-                    pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
-                    cache.set(for: cacheKey, value: pHash)
+                        finishedImageCount = finishedImageCount + 1;
+                        self.sendEvent("pHash-calculated", [
+                            "finished": finishedImageCount,
+                            "total": imageAppleIds.count
+                        ])
+                        return
+                    }
+
+                    let cacheKey = "\(asset.localIdentifier)_\(hashAlgorithmName)"
+                    var pHash: String
+
+                    if let cachedHash = cache.get(for: cacheKey) {
+                        pHash = cachedHash
+                    } else {
+                        let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
+                        let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
+                        pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
+                        cache.set(for: cacheKey, value: pHash)
+                    }
+
+                    // append the pHash and the index of the corresponding asset to the pHashes array
+                    let tuple = (index: count, hash: pHash)
+                    pHashes.append(tuple)
+
+                    pHashGroup.leave()
+
+                    finishedImageCount = finishedImageCount + 1;
+                    self.sendEvent("pHash-calculated", [
+                        "finished": finishedImageCount,
+                        "total": imageAppleIds.count
+                    ])
                 }
-
-                // append the pHash and the index of the corresponding asset to the pHashes array
-                let tuple = (index: count, hash: pHash)
-                pHashes.append(tuple)
-
-                self.sendEvent("pHash-calculated", [
-                    "finished": pHashes.count,
-                    "total": imageAppleIds.count
-                ])
-
-                group.leave() // leave DispatchGroup
             }
         }
     }
-
     // Wait for all the image processing tasks to complete before returning the results
-    group.wait()
+    pHashGroup.wait()
 
     // Sort the pHashes array by index to restore the original order
     pHashes.sort { $0.index < $1.index }
@@ -202,13 +228,13 @@ public class ReactNativePhashModule: Module {
 
     // Defines a JavaScript function that always returns a Promise and whose native code
     // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("getPerceptualHashes") { (imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String) -> [String?] in
-        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName, maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier);
+    AsyncFunction("getPerceptualHashes") { (imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, concurrentBatchSize: Int, maxConcurrent: Int) -> [String?] in
+        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName, maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier, concurrentBatchSize: concurrentBatchSize, maxConcurrent: maxConcurrent);
         return pHashes
     }
 
-    AsyncFunction("findSimilarImages") { (imageAppleIds: [String], maxHammingDistance: Int, hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String) -> [[String]] in
-        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName, maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
+    AsyncFunction("findSimilarImages") { (imageAppleIds: [String], maxHammingDistance: Int, hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, concurrentBatchSize: Int, maxConcurrent: Int) -> [[String]] in
+        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName, maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier, concurrentBatchSize: concurrentBatchSize, maxConcurrent: maxConcurrent)
         var similarImages = [[String]]()
 
         sendEvent("find-similar-iteration", [
@@ -247,7 +273,7 @@ public class ReactNativePhashModule: Module {
         return similarImages
     }
 
-    AsyncFunction("findSimilarImagesKDTree") { (imageAppleIds: [String], maxHammingDistance: Int, hashAlgorithmName: String, nearestK: Int, maxCacheSize: Int, storageIdentifier: String) -> [[String]] in
+    AsyncFunction("findSimilarImagesKDTree") { (imageAppleIds: [String], maxHammingDistance: Int, hashAlgorithmName: String, nearestK: Int, maxCacheSize: Int, storageIdentifier: String, concurrentBatchSize: Int, maxConcurrent: Int) -> [[String]] in
         struct Point64D: KDTreePoint {
             static var dimensions: Int { 64 }
             var coordinates: [Double]
@@ -264,7 +290,7 @@ public class ReactNativePhashModule: Module {
             }
         }
 
-        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName, maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
+        let pHashes = calcPerceptualHashes(imageAppleIds: imageAppleIds, hashAlgorithmName: hashAlgorithmName, maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier, concurrentBatchSize: concurrentBatchSize, maxConcurrent: maxConcurrent)
         var points64D = [Point64D]()
 
         for (index, pHash) in pHashes.enumerated() {

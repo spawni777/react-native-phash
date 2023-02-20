@@ -1,7 +1,6 @@
 import { EventEmitter, Subscription } from "expo-modules-core";
 
 import ReactNativePhashModule from "./ReactNativePhashModule";
-import { Platform } from "react-native";
 
 type Enumerate<
   N extends number,
@@ -65,6 +64,8 @@ export type PHashOptions = {
   hashAlgorithmName?: HashAlgorithmName;
   maxCacheSize?: number;
   storageIdentifier?: string;
+  concurrentBatchSize?: number;
+  maxConcurrent?: number;
 };
 
 export async function getImagesPerceptualHashes(
@@ -73,6 +74,8 @@ export async function getImagesPerceptualHashes(
     hashAlgorithmName = "dHash",
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
+    concurrentBatchSize = 10,
+    maxConcurrent = 10,
   }: PHashOptions = {}
 ): Promise<string[]> {
   const appleIds = imageIds.length ? imageIds : [imageIds];
@@ -82,7 +85,9 @@ export async function getImagesPerceptualHashes(
     appleIds,
     hashAlgorithmName,
     maxCacheSize,
-    storageIdentifier
+    storageIdentifier,
+    concurrentBatchSize,
+    maxConcurrent
   );
 }
 
@@ -97,6 +102,8 @@ export async function findSimilarImages(
     maxHammingDistance = 5,
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
+    concurrentBatchSize = 10,
+    maxConcurrent = 10,
   }: FindSimilarImagesOptions = {}
 ): Promise<[string, string][]> {
   const appleIds = imageIds?.length ? imageIds : [imageIds];
@@ -107,7 +114,9 @@ export async function findSimilarImages(
     maxHammingDistance,
     hashAlgorithmName,
     maxCacheSize,
-    storageIdentifier
+    storageIdentifier,
+    concurrentBatchSize,
+    maxConcurrent
   );
 }
 
@@ -123,6 +132,8 @@ export async function findSimilarImagesKDTree(
     nearestK = 2,
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
+    concurrentBatchSize = 10,
+    maxConcurrent = 10,
   }: FindSimilarImagesKDTreeOptions = {}
 ): Promise<string[][]> {
   const appleIds = imageIds?.length ? imageIds : [imageIds];
@@ -134,6 +145,8 @@ export async function findSimilarImagesKDTree(
     hashAlgorithmName,
     nearestK,
     maxCacheSize,
-    storageIdentifier
+    storageIdentifier,
+    concurrentBatchSize,
+    maxConcurrent,
   );
 }
