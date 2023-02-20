@@ -15,9 +15,9 @@ const pHashCalculatedSubscription = addListener(
     const percentage = Math.floor((finished / total) * 10000) / 100;
     console.log(`pHash-calculated: ${percentage}%`);
 
-    if (percentage >= 100) {
-      pHashCalculatedSubscription.remove();
-    }
+    // if (percentage >= 100) {
+    //   pHashCalculatedSubscription.remove();
+    // }
   }
 );
 const findSimilarIterationSubscription = addListener(
@@ -26,15 +26,15 @@ const findSimilarIterationSubscription = addListener(
     const percentage = Math.floor((finished / total) * 10000) / 100;
     console.log(`find-similar-iteration: ${percentage}%`);
 
-    if (percentage >= 100) {
-      findSimilarIterationSubscription.remove();
-    }
+    // if (percentage >= 100) {
+    //   findSimilarIterationSubscription.remove();
+    // }
   }
 );
 
 const calcAndLog1 = async () => {
   const { assets } = await MediaLibrary.getAssetsAsync({
-    first: 1000,
+    first: 200,
     mediaType: "photo",
   });
 
@@ -42,6 +42,8 @@ const calcAndLog1 = async () => {
     assets.map((asset) => asset.id),
     {
       maxCacheSize: 0,
+      concurrentBatchSize: 10,
+      maxConcurrent: 5,
     }
   );
   console.log(JSON.stringify(imagesPerceptualHashes, null, 2));
@@ -71,7 +73,9 @@ const calcAndLog3 = async () => {
 
   const similarImagesKDTree = await findSimilarImagesKDTree(
     assets.map((asset) => asset.id),
-    { maxCacheSize: 0 }
+    {
+      maxCacheSize: 0,
+    }
   );
   console.log(JSON.stringify(similarImagesKDTree, null, 2));
 };

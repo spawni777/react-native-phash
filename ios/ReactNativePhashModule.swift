@@ -5,24 +5,6 @@ import KDTree
 
 let imageHashing = OSImageHashing.sharedInstance()
 
-class LimitedConcurrencyQueue {
-    let queue: DispatchQueue
-    let semaphore: DispatchSemaphore
-
-    init(label: String, maxConcurrent: Int) {
-        queue = DispatchQueue(label: label, qos: .userInitiated, attributes: .concurrent)
-        semaphore = DispatchSemaphore(value: maxConcurrent)
-    }
-
-    func async(_ block: @escaping () -> Void) {
-        queue.async {
-            self.semaphore.wait()
-            block()
-            self.semaphore.signal()
-        }
-    }
-}
-
 class ImageObject {
   var data: Data
   var appleId: String
@@ -134,11 +116,13 @@ public class ReactNativePhashModule: Module {
 
     let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
 
-    // Create a concurrent queue to perform the expensive task of calculating the perceptual hash of each image
-    let queue = LimitedConcurrencyQueue(label: "spawni.imageProcessingQueue", maxConcurrent: maxConcurrent)
-
     // Use DispatchGroup to keep track of the completion of all the image processing tasks
-    let pHashGroup = DispatchGroup()
+    let batchGroup = DispatchGroup()
+
+    // Create a concurrent queue to perform the expensive task of calculating the perceptual hash of each image
+    let queue = DispatchQueue(label: storageIdentifier, qos: .userInitiated, attributes: .concurrent)
+
+	let semaphore = DispatchSemaphore(value: maxConcurrent)
 
     let totalImageCount = imageAppleIds.count
     var finishedImageCount = 0
@@ -151,27 +135,28 @@ public class ReactNativePhashModule: Module {
         "total": imageAppleIds.count
     ])
     for batchIndex in 0..<batchCount {
-        let batchStartIndex = batchIndex * concurrentBatchSize
-        let batchEndIndex = min((batchIndex + 1) * concurrentBatchSize, totalImageCount)
-        let assets = fetchResult.objects(at: IndexSet(integersIn: batchStartIndex..<batchEndIndex))
 
-        // process the image data asynchronously on the concurrent queue
-        queue.async() {
+        queue.async(group: batchGroup) {
+            batchGroup.enter()
+
+            // Wait for the semaphore to signal that it's safe to start a new task
+            semaphore.wait()
+
+            let batchStartIndex = batchIndex * concurrentBatchSize
+            let batchEndIndex = min((batchIndex + 1) * concurrentBatchSize, totalImageCount)
+            let assets = fetchResult.objects(at: IndexSet(integersIn: batchStartIndex..<batchEndIndex))
+
             for (count, asset) in assets.enumerated() {
-                pHashGroup.enter()
                 // assuming you have a `PHAsset` instance called `asset`:
                 let options = PHImageRequestOptions()
                 options.deliveryMode = .fastFormat
-                options.isSynchronous = false // allow the result to be returned asynchronously
-
+                options.isSynchronous = true
                 PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (imageData, dataUTI, orientation, info) in
                     guard let imageData = imageData else {
                         // handle error
                         // append the pHash and the index of the corresponding asset to the pHashes array
-                        let tuple: (index: Int, hash: String?) = (index: count, hash: nil)
+                        let tuple: (index: Int, hash: String?) = (index: batchStartIndex + count, hash: nil)
                         pHashes.append(tuple)
-
-						pHashGroup.leave()
 
                         finishedImageCount = finishedImageCount + 1;
                         self.sendEvent("pHash-calculated", [
@@ -194,10 +179,8 @@ public class ReactNativePhashModule: Module {
                     }
 
                     // append the pHash and the index of the corresponding asset to the pHashes array
-                    let tuple = (index: count, hash: pHash)
+                    let tuple = (index: batchStartIndex + count, hash: pHash)
                     pHashes.append(tuple)
-
-                    pHashGroup.leave()
 
                     finishedImageCount = finishedImageCount + 1;
                     self.sendEvent("pHash-calculated", [
@@ -206,10 +189,24 @@ public class ReactNativePhashModule: Module {
                     ])
                 }
             }
+
+            batchGroup.leave()
+            // Signal the semaphore to indicate that the task is finished and a new task can start
+            semaphore.signal()
         }
     }
     // Wait for all the image processing tasks to complete before returning the results
-    pHashGroup.wait()
+    batchGroup.wait()
+
+    let expectedIndexes = Set(0..<totalImageCount)
+    let presentIndexes = Set(pHashes.map { $0.index })
+    let missingIndexes = expectedIndexes.subtracting(presentIndexes)
+
+    // Append nil for missing indexes
+    for index in missingIndexes {
+        let tuple: (index: Int, hash: String?) = (index: index, hash: nil)
+        pHashes.append(tuple)
+    }
 
     // Sort the pHashes array by index to restore the original order
     pHashes.sort { $0.index < $1.index }
