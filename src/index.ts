@@ -87,6 +87,126 @@ export async function getImagesPHashIterative(
   });
 }
 
+export async function getImagesPHashIterative1(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "fastFormat",
+  }: PHashOptions = {}
+): Promise<string[]> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.getPHashesIterative1(appleIds, {
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+  });
+}
+
+export async function getImagesPHashIterative2(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "fastFormat",
+  }: PHashOptions = {}
+): Promise<string[]> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.getPHashesIterative2(appleIds, {
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+  });
+}
+
+export async function getImagesPHashIterative3(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "fastFormat",
+  }: PHashOptions = {}
+): Promise<string[]> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.getPHashesIterative3(appleIds, {
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+  });
+}
+
+export async function getImagesPHashIterative4(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "fastFormat",
+  }: PHashOptions = {}
+): Promise<string[]> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.getPHashesIterative4(appleIds, {
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+  });
+}
+
+export async function getImagesPHashIterative5(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "fastFormat",
+  }: PHashOptions = {}
+): Promise<string[]> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.getPHashesIterative5(appleIds, {
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+  });
+}
+
+export async function getImagesPHashIterative6(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "fastFormat",
+  }: PHashOptions = {}
+): Promise<string[]> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.getPHashesIterative6(appleIds, {
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+  });
+}
+
 export type PHashConcurrentlyOptions = PHashOptions & {
   concurrentBatchSize?: number;
   maxConcurrent?: number;
