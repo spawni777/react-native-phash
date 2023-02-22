@@ -64,68 +64,121 @@ export type PHashOptions = {
   hashAlgorithmName?: HashAlgorithmName;
   maxCacheSize?: number;
   storageIdentifier?: string;
-  concurrentBatchSize?: number;
-  maxConcurrent?: number;
+  imageQuality?: "fastFormat" | "highQualityFormat";
 };
 
-export async function getImagesPerceptualHashes(
-  imageIds: string | string[],
+export async function getImagesPHashIterative(
+  imageAppleIds: string | string[],
   {
     hashAlgorithmName = "dHash",
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
-    concurrentBatchSize = 10,
-    maxConcurrent = 10,
+    imageQuality = "fastFormat",
   }: PHashOptions = {}
 ): Promise<string[]> {
-  const appleIds = imageIds.length ? imageIds : [imageIds];
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
   maxCacheSize = Math.max(0, maxCacheSize);
 
-  return ReactNativePhashModule.getPerceptualHashes(
-    appleIds,
+  return ReactNativePhashModule.getPHashesIterative(appleIds, {
     hashAlgorithmName,
     maxCacheSize,
     storageIdentifier,
-    concurrentBatchSize,
-    maxConcurrent
-  );
+    imageQuality,
+  });
 }
 
-export type FindSimilarImagesOptions = PHashOptions & {
+export type PHashConcurrentlyOptions = PHashOptions & {
+  concurrentBatchSize?: number;
+  maxConcurrent?: number;
+};
+
+export async function getImagesPHashConcurrently(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "fastFormat",
+    concurrentBatchSize = 10,
+    maxConcurrent = 10,
+  }: PHashConcurrentlyOptions = {}
+): Promise<string[]> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+  maxConcurrent = Math.max(1, maxConcurrent);
+  concurrentBatchSize = Math.max(1, concurrentBatchSize);
+
+  return ReactNativePhashModule.getPHashesConcurrently(appleIds, {
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+    maxConcurrent,
+    concurrentBatchSize,
+  });
+}
+
+export type FindSimilarOptions = PHashOptions & {
   maxHammingDistance?: MaxHammingDistance;
 };
 
-export async function findSimilarImages(
-  imageIds: string | string[],
+export async function findSimilarIterative(
+  imageAppleIds: string | string[],
   {
     hashAlgorithmName = "dHash",
     maxHammingDistance = 5,
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
-    concurrentBatchSize = 10,
-    maxConcurrent = 10,
-  }: FindSimilarImagesOptions = {}
+    imageQuality = "fastFormat",
+  }: FindSimilarOptions = {}
 ): Promise<[string, string][]> {
-  const appleIds = imageIds?.length ? imageIds : [imageIds];
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
   maxCacheSize = Math.max(0, maxCacheSize);
 
-  return ReactNativePhashModule.findSimilarImages(
-    appleIds,
+  return ReactNativePhashModule.findSimilarIterative(appleIds, {
     maxHammingDistance,
     hashAlgorithmName,
     maxCacheSize,
     storageIdentifier,
-    concurrentBatchSize,
-    maxConcurrent
-  );
+    imageQuality,
+  });
 }
 
-type FindSimilarImagesKDTreeOptions = FindSimilarImagesOptions & {
+type FindSimilarKDTreeOptions = FindSimilarOptions & {
   nearestK?: NearestK;
 };
 
-export async function findSimilarImagesKDTree(
-  imageIds: string | string[],
+export async function findSimilarIterativeKDTree(
+  imageAppleIds: string | string[],
+  {
+    maxHammingDistance = 5,
+    hashAlgorithmName = "dHash",
+    nearestK = 2,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "fastFormat",
+  }: FindSimilarKDTreeOptions = {}
+): Promise<string[][]> {
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.findSimilarIterativeKDTree(appleIds, {
+    maxHammingDistance,
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+    nearestK,
+  });
+}
+
+type FindSimilarConcurrentlyOptions = FindSimilarKDTreeOptions & {
+  concurrentBatchSize?: number;
+  maxConcurrent?: number;
+};
+
+export async function findSimilarConcurrentlyPartial(
+  imageAppleIds: string | string[],
   {
     maxHammingDistance = 5,
     hashAlgorithmName = "dHash",
@@ -134,19 +187,52 @@ export async function findSimilarImagesKDTree(
     storageIdentifier = "Spawni-PHash",
     concurrentBatchSize = 10,
     maxConcurrent = 10,
-  }: FindSimilarImagesKDTreeOptions = {}
+    imageQuality = "fastFormat",
+  }: FindSimilarConcurrentlyOptions = {}
 ): Promise<string[][]> {
-  const appleIds = imageIds?.length ? imageIds : [imageIds];
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
   maxCacheSize = Math.max(0, maxCacheSize);
+  maxConcurrent = Math.max(1, maxConcurrent);
+  concurrentBatchSize = Math.max(1, concurrentBatchSize);
 
-  return ReactNativePhashModule.findSimilarImagesKDTree(
-    appleIds,
+  return ReactNativePhashModule.findSimilarConcurrentlyPartial(appleIds, {
     maxHammingDistance,
     hashAlgorithmName,
-    nearestK,
     maxCacheSize,
     storageIdentifier,
     concurrentBatchSize,
     maxConcurrent,
-  );
+    imageQuality,
+    nearestK,
+  });
+}
+
+export async function findSimilarConcurrently(
+  imageAppleIds: string | string[],
+  {
+    maxHammingDistance = 5,
+    hashAlgorithmName = "dHash",
+    nearestK = 2,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    concurrentBatchSize = 10,
+    maxConcurrent = 10,
+    imageQuality = "fastFormat",
+  }: FindSimilarConcurrentlyOptions = {}
+): Promise<string[][]> {
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+  maxConcurrent = Math.max(1, maxConcurrent);
+  concurrentBatchSize = Math.max(1, concurrentBatchSize);
+
+  return ReactNativePhashModule.findSimilarConcurrently(appleIds, {
+    maxHammingDistance,
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    concurrentBatchSize,
+    maxConcurrent,
+    imageQuality,
+    nearestK,
+  });
 }
