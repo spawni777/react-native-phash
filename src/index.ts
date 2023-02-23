@@ -18,7 +18,10 @@ export type NearestK = Range<1, 100>;
 export type MaxHammingDistance = Range<1, 64>;
 export type HashAlgorithmName = "dHash" | "pHash" | "aHash";
 
-type EventNameEnum = "pHash-calculated" | "find-similar-iteration";
+type EventNameEnum =
+  | "pHash-calculated"
+  | "find-similar-iteration"
+  | "md5-calculated";
 
 type PHashEvent = {
   finished: number;
@@ -28,6 +31,7 @@ type PHashEvent = {
 type ReturnEventMap = {
   "pHash-calculated": PHashEvent;
   "find-similar-iteration": PHashEvent;
+  "md5-calculated": PHashEvent;
 };
 
 function makeId(length) {
@@ -47,6 +51,7 @@ const emitter = new EventEmitter(ReactNativePhashModule);
 // add clear listeners to remove warnings
 emitter.addListener<"pHash-calculated">("pHash-calculated", () => {});
 emitter.addListener<"pHash-calculated">("find-similar-iteration", () => {});
+emitter.addListener<"md5-calculated">("md5-calculated", () => {});
 
 export const subscriptions: { [key: string]: Subscription } = {};
 export function addListener<T extends EventNameEnum>(
@@ -73,7 +78,7 @@ export async function getImagesPHashIterative(
     hashAlgorithmName = "dHash",
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
+    imageQuality = "highQualityFormat",
   }: PHashOptions = {}
 ): Promise<string[]> {
   const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
@@ -87,123 +92,21 @@ export async function getImagesPHashIterative(
   });
 }
 
-export async function getImagesPHashIterative1(
+export type HashOptions = {
+  maxCacheSize?: number;
+  storageIdentifier?: string;
+};
+
+export async function getImagesDuplicatesIterative(
   imageAppleIds: string | string[],
-  {
-    hashAlgorithmName = "dHash",
-    maxCacheSize = 10000,
-    storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
-  }: PHashOptions = {}
+  { maxCacheSize = 10000, storageIdentifier = "Spawni-Hash" }: HashOptions = {}
 ): Promise<string[]> {
   const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
   maxCacheSize = Math.max(0, maxCacheSize);
 
-  return ReactNativePhashModule.getPHashesIterative1(appleIds, {
-    hashAlgorithmName,
+  return ReactNativePhashModule.findDuplicatesIterative(appleIds, {
     maxCacheSize,
     storageIdentifier,
-    imageQuality,
-  });
-}
-
-export async function getImagesPHashIterative2(
-  imageAppleIds: string | string[],
-  {
-    hashAlgorithmName = "dHash",
-    maxCacheSize = 10000,
-    storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
-  }: PHashOptions = {}
-): Promise<string[]> {
-  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
-  maxCacheSize = Math.max(0, maxCacheSize);
-
-  return ReactNativePhashModule.getPHashesIterative2(appleIds, {
-    hashAlgorithmName,
-    maxCacheSize,
-    storageIdentifier,
-    imageQuality,
-  });
-}
-
-export async function getImagesPHashIterative3(
-  imageAppleIds: string | string[],
-  {
-    hashAlgorithmName = "dHash",
-    maxCacheSize = 10000,
-    storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
-  }: PHashOptions = {}
-): Promise<string[]> {
-  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
-  maxCacheSize = Math.max(0, maxCacheSize);
-
-  return ReactNativePhashModule.getPHashesIterative3(appleIds, {
-    hashAlgorithmName,
-    maxCacheSize,
-    storageIdentifier,
-    imageQuality,
-  });
-}
-
-export async function getImagesPHashIterative4(
-  imageAppleIds: string | string[],
-  {
-    hashAlgorithmName = "dHash",
-    maxCacheSize = 10000,
-    storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
-  }: PHashOptions = {}
-): Promise<string[]> {
-  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
-  maxCacheSize = Math.max(0, maxCacheSize);
-
-  return ReactNativePhashModule.getPHashesIterative4(appleIds, {
-    hashAlgorithmName,
-    maxCacheSize,
-    storageIdentifier,
-    imageQuality,
-  });
-}
-
-export async function getImagesPHashIterative5(
-  imageAppleIds: string | string[],
-  {
-    hashAlgorithmName = "dHash",
-    maxCacheSize = 10000,
-    storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
-  }: PHashOptions = {}
-): Promise<string[]> {
-  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
-  maxCacheSize = Math.max(0, maxCacheSize);
-
-  return ReactNativePhashModule.getPHashesIterative5(appleIds, {
-    hashAlgorithmName,
-    maxCacheSize,
-    storageIdentifier,
-    imageQuality,
-  });
-}
-
-export async function getImagesPHashIterative6(
-  imageAppleIds: string | string[],
-  {
-    hashAlgorithmName = "dHash",
-    maxCacheSize = 10000,
-    storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
-  }: PHashOptions = {}
-): Promise<string[]> {
-  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
-  maxCacheSize = Math.max(0, maxCacheSize);
-
-  return ReactNativePhashModule.getPHashesIterative6(appleIds, {
-    hashAlgorithmName,
-    maxCacheSize,
-    storageIdentifier,
-    imageQuality,
   });
 }
 
@@ -218,7 +121,7 @@ export async function getImagesPHashConcurrently(
     hashAlgorithmName = "dHash",
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
+    imageQuality = "highQualityFormat",
     concurrentBatchSize = 10,
     maxConcurrent = 10,
   }: PHashConcurrentlyOptions = {}
@@ -242,6 +145,32 @@ export type FindSimilarOptions = PHashOptions & {
   maxHammingDistance?: MaxHammingDistance;
 };
 
+export async function findSimilarIterativeOld(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxHammingDistance = 5,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "highQualityFormat",
+  }: FindSimilarOptions = {}
+): Promise<[string, string][]> {
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.findSimilarIterativeOld(appleIds, {
+    maxHammingDistance,
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+  });
+}
+
+export type FindSimilarOptionsUpdated = FindSimilarOptions & {
+  nearestK?: NearestK;
+};
+
 export async function findSimilarIterative(
   imageAppleIds: string | string[],
   {
@@ -249,8 +178,9 @@ export async function findSimilarIterative(
     maxHammingDistance = 5,
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
-  }: FindSimilarOptions = {}
+    nearestK = 1,
+    imageQuality = "highQualityFormat",
+  }: FindSimilarOptionsUpdated = {}
 ): Promise<[string, string][]> {
   const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
   maxCacheSize = Math.max(0, maxCacheSize);
@@ -259,6 +189,7 @@ export async function findSimilarIterative(
     maxHammingDistance,
     hashAlgorithmName,
     maxCacheSize,
+    nearestK,
     storageIdentifier,
     imageQuality,
   });
@@ -273,10 +204,10 @@ export async function findSimilarIterativeKDTree(
   {
     maxHammingDistance = 5,
     hashAlgorithmName = "dHash",
-    nearestK = 2,
+    nearestK = 1,
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
-    imageQuality = "fastFormat",
+    imageQuality = "highQualityFormat",
   }: FindSimilarKDTreeOptions = {}
 ): Promise<string[][]> {
   const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
@@ -302,12 +233,12 @@ export async function findSimilarConcurrentlyPartial(
   {
     maxHammingDistance = 5,
     hashAlgorithmName = "dHash",
-    nearestK = 2,
+    nearestK = 1,
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
     concurrentBatchSize = 10,
     maxConcurrent = 10,
-    imageQuality = "fastFormat",
+    imageQuality = "highQualityFormat",
   }: FindSimilarConcurrentlyOptions = {}
 ): Promise<string[][]> {
   const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
@@ -327,17 +258,47 @@ export async function findSimilarConcurrentlyPartial(
   });
 }
 
+export async function findSimilarConcurrentlyOld(
+  imageAppleIds: string | string[],
+  {
+    maxHammingDistance = 5,
+    hashAlgorithmName = "dHash",
+    nearestK = 1,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    concurrentBatchSize = 10,
+    maxConcurrent = 10,
+    imageQuality = "highQualityFormat",
+  }: FindSimilarConcurrentlyOptions = {}
+): Promise<string[][]> {
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+  maxConcurrent = Math.max(1, maxConcurrent);
+  concurrentBatchSize = Math.max(1, concurrentBatchSize);
+
+  return ReactNativePhashModule.findSimilarConcurrentlyOld(appleIds, {
+    maxHammingDistance,
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    concurrentBatchSize,
+    maxConcurrent,
+    imageQuality,
+    nearestK,
+  });
+}
+
 export async function findSimilarConcurrently(
   imageAppleIds: string | string[],
   {
     maxHammingDistance = 5,
     hashAlgorithmName = "dHash",
-    nearestK = 2,
+    nearestK = 1,
     maxCacheSize = 10000,
     storageIdentifier = "Spawni-PHash",
     concurrentBatchSize = 10,
     maxConcurrent = 10,
-    imageQuality = "fastFormat",
+    imageQuality = "highQualityFormat",
   }: FindSimilarConcurrentlyOptions = {}
 ): Promise<string[][]> {
   const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];

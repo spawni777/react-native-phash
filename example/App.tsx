@@ -9,20 +9,34 @@ import {
   findSimilarIterativeKDTree,
   findSimilarConcurrentlyPartial,
   addListener,
-  findSimilarConcurrently,
+  findSimilarConcurrently, getImagesDuplicatesIterative
 } from "react-native-phash";
 
 const pHashCalculatedSubscription = addListener(
   "pHash-calculated",
   ({ finished, total }) => {
     const percentage = Math.floor((finished / total) * 10000) / 100;
-    console.log(`pHash-calculated: ${percentage}%`);
+    // console.log(`pHash-calculated: ${percentage}%`);
+    console.log(`pHash-calculated: ${finished}`);
 
     // if (percentage >= 100) {
     //   pHashCalculatedSubscription.remove();
     // }
   }
 );
+
+const hashCalculatedSubscription = addListener(
+  "md5-calculated",
+  ({ finished, total }) => {
+    const percentage = Math.floor((finished / total) * 10000) / 100;
+    console.log(`md5-calculated: ${percentage}%`);
+
+    // if (percentage >= 100) {
+    //   hashCalculatedSubscription.remove();
+    // }
+  }
+);
+
 const findSimilarIterationSubscription = addListener(
   "find-similar-iteration",
   ({ finished, total }) => {
@@ -79,6 +93,7 @@ const calcAndLog3 = async () => {
     assets.map((asset) => asset.id),
     {
       maxCacheSize: 0,
+      maxHammingDistance: 40,
     }
   );
   console.log(JSON.stringify(similarImages, null, 2));
@@ -134,16 +149,32 @@ const calcAndLog6 = async () => {
   const similarImagesKDTree = await findSimilarConcurrently(
     assets.map((asset) => asset.id),
     {
-      maxCacheSize: 200,
+      maxCacheSize: 0,
       concurrentBatchSize: 50,
       maxConcurrent: 100,
-      nearestK: 1,
+      nearestK: 10,
       hashAlgorithmName: "pHash",
       maxHammingDistance: 1,
     }
   );
   console.log(JSON.stringify(similarImagesKDTree, null, 2));
   console.log(similarImagesKDTree.length);
+};
+
+const calcAndLog7 = async () => {
+  const { assets } = await MediaLibrary.getAssetsAsync({
+    first: 1000,
+    mediaType: "photo",
+  });
+
+  const duplicates = await getImagesDuplicatesIterative(
+    assets.map((asset) => asset.id),
+    {
+      maxCacheSize: 0,
+    }
+  );
+  console.log(JSON.stringify(duplicates, null, 2));
+  console.log(duplicates.length);
 };
 
 export default function App() {
@@ -165,6 +196,7 @@ export default function App() {
       <Button title={"findSimilarIterativeKDTree"} onPress={calcAndLog4}/>
       <Button title={"findSimilarConcurrentlyPartial"} onPress={calcAndLog5}/>
       <Button title={"findSimilarConcurrently"} onPress={calcAndLog6}/>
+      <Button title={"getImagesDuplicatesIterative"} onPress={calcAndLog7}/>
     </View>
   );
 }

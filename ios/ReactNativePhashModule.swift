@@ -2,8 +2,16 @@ import ExpoModulesCore
 import CocoaImageHashing
 import Photos
 import KDTree
+import CryptoKit
 
 let imageHashing = OSImageHashing.sharedInstance()
+
+extension Data {
+    func md5() -> String {
+        let digest = Insecure.MD5.hash(data: self)
+        return digest.map { String(format: "%02hhx", $0) }.joined()
+    }
+}
 
 struct FindSimilarOptions: Record {
   @Field
@@ -41,8 +49,8 @@ class ImageObject {
   }
 }
 
-class ImagePHashCache {
-    private var memoryCache = [String:String]()
+class ImagePHashCache<DataType> {
+    private var memoryCache = [String: DataType]()
     private let defaults = UserDefaults.standard
     private let maxCacheSize: Int
     private let storageIdentifier: String
@@ -58,14 +66,14 @@ class ImagePHashCache {
           return;
         }
 
-        if let cacheDictionary = defaults.dictionary(forKey: storageIdentifier) as? [String: String] {
+        if let cacheDictionary = defaults.dictionary(forKey: storageIdentifier) as? [String: DataType] {
            self.memoryCache = cacheDictionary
         }
 
         self.isDisabled = false
     }
 
-    func get(for key: String) -> String? {
+    func get(for key: String) -> DataType? {
         if isDisabled {
           return nil
         }
@@ -76,14 +84,14 @@ class ImagePHashCache {
         return value
     }
 
-    func set(for key: String, value: String) {
+    func set(for key: String, value: DataType) {
         if (isDisabled) {
           return
         }
 
-		if memoryCache[key] == value {
-			return
-		}
+// 		if memoryCache[key] == value {
+// 			return
+// 		}
         memoryCache[key] = value
     }
 
@@ -129,13 +137,24 @@ func calcHammingDistance(lhsData: [Double], rhsData: [Double]) -> Int {
   return diff;
 }
 
+func calcHammingDistance(lhsData: OSHashType, rhsData: OSHashType, hashAlgorithmName: String) -> OSHashDistanceType {
+  switch hashAlgorithmName {
+      case "dHash":
+          return imageHashing.hashDistance(lhsData, to: rhsData, with: .dHash)
+      case "pHash":
+          return imageHashing.hashDistance(lhsData, to: rhsData, with: .pHash)
+      default:
+          return imageHashing.hashDistance(lhsData, to: rhsData, with: .aHash)
+  }
+}
+
 
 public class ReactNativePhashModule: Module {
   // Each module class must implement the definition function. The definition consists of components
   // that describes the module's functionality and behavior.
   // See https://docs.expo.dev/modules/module-api for more details about available components.
-  func calcPHashesConcurrently(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, concurrentBatchSize: Int, maxConcurrent: Int, imageQuality: String) -> [String?] {
-    let cache = ImagePHashCache(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
+  func calcPHashesStringConcurrently(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, concurrentBatchSize: Int, maxConcurrent: Int, imageQuality: String) -> [String?] {
+    let cache = ImagePHashCache<String>(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
 
     func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
         switch hashAlgorithmName {
@@ -270,15 +289,143 @@ public class ReactNativePhashModule: Module {
     // squeeze local cache to maxCacheSize elements
     cache.updateUserDefaults()
 
-//     let expectedIndexes = Set(0..<totalImageCount)
-//     let presentIndexes = Set(pHashes.map { $0.index })
-//     let missingIndexes = expectedIndexes.subtracting(presentIndexes)
-//
-//     // Append nil for missing indexes
-//     for index in missingIndexes {
-//         let tuple: (index: Int, hash: String?) = (index: index, hash: nil)
-//         pHashes.append(tuple)
-//     }
+    // Sort the pHashes array by index to restore the original order
+    pHashes.sort { $0.index < $1.index }
+
+    // Return an array of pHash values without the index
+    return pHashes.map { $0.hash }
+  }
+
+  func calcPHashesConcurrently(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, concurrentBatchSize: Int, maxConcurrent: Int, imageQuality: String) -> [OSHashType?] {
+    let cache = ImagePHashCache<OSHashType>(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
+
+    func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
+        switch hashAlgorithmName {
+            case "dHash":
+                return imageHashing.hashImageData(imageData, with: .dHash)
+            case "pHash":
+                return imageHashing.hashImageData(imageData, with: .pHash)
+            default:
+                return imageHashing.hashImageData(imageData, with: .aHash)
+        }
+    }
+
+    var pHashes: [(index: Int, hash: OSHashType?)] = []
+
+    let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
+
+    // Use DispatchGroup to keep track of the completion of all the image processing tasks
+    let pHashGroup = DispatchGroup()
+
+    // Create a concurrent queue to perform the expensive task of calculating the perceptual hash of each image
+    let queue = DispatchQueue(label: "spawni-phash-calculation", qos: .userInitiated, attributes: .concurrent)
+
+    let semaphore = DispatchSemaphore(value: maxConcurrent)
+
+    let totalImageCount = imageAppleIds.count
+    var finishedImageCount = 0
+
+    // batchCount rounded up
+    let batchCount = (totalImageCount - 1 + concurrentBatchSize) / concurrentBatchSize
+
+    self.sendEvent("pHash-calculated", [
+        "finished": 0,
+        "total": imageAppleIds.count
+    ])
+    for batchIndex in 0..<batchCount {
+        // Wait for the semaphore to signal that it's safe to start a new task
+        semaphore.wait()
+
+        queue.async(group: pHashGroup) {
+            autoreleasepool {
+                let batchStartIndex = batchIndex * concurrentBatchSize
+                let batchEndIndex = min((batchIndex + 1) * concurrentBatchSize, totalImageCount)
+                let assets = fetchResult.objects(at: IndexSet(integersIn: batchStartIndex..<batchEndIndex))
+
+                for (count, asset) in assets.enumerated() {
+                     autoreleasepool {
+                        // assuming you have a `PHAsset` instance called `asset`:
+                        let options = PHImageRequestOptions()
+
+                      if imageQuality == "fastFormat" {
+                          options.deliveryMode = .fastFormat
+                      } else {
+                          options.deliveryMode = .highQualityFormat
+                      }
+                        options.isSynchronous = true
+
+                        var imageData: Data?
+
+                        PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (data, dataUTI, orientation, info) in
+                            autoreleasepool {
+                              imageData = data
+                            }
+                        }
+
+                        guard let imageData = imageData else {
+                            // handle error
+                            // append the pHash and the index of the corresponding asset to the pHashes array
+                            let tuple: (index: Int, hash: OSHashType?) = (index: batchStartIndex + count, hash: nil)
+                            pHashes.append(tuple)
+
+                            finishedImageCount = finishedImageCount + 1;
+                            self.sendEvent("pHash-calculated", [
+                                "finished": finishedImageCount,
+                                "total": imageAppleIds.count
+                            ])
+                            return
+                        }
+
+                        var pHash: OSHashType
+
+                        if (!cache.isDisabled) {
+                            let cacheKey = "\(asset.localIdentifier)_\(hashAlgorithmName)"
+                            var cachedHash: OSHashType?
+
+                            cachedHash = cache.get(for: cacheKey)
+
+                          if cachedHash != nil {
+                                pHash = cachedHash!
+                          } else {
+                              pHash = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
+                          }
+
+                          queue.async(group: pHashGroup, flags:.barrier) {
+                              cache.set(for: cacheKey, value: pHash)
+                              // Signal the semaphore to indicate that the task is finished and a new task can start
+                              semaphore.signal()
+                          }
+                        } else {
+                            pHash = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
+                        }
+
+                        // append the pHash and the index of the corresponding asset to the pHashes array
+                        let tuple = (index: batchStartIndex + count, hash: pHash)
+
+                        finishedImageCount = finishedImageCount + 1;
+                        self.sendEvent("pHash-calculated", [
+                            "finished": finishedImageCount,
+                            "total": imageAppleIds.count
+                        ])
+
+                        queue.async(group: pHashGroup, flags:.barrier) {
+                            pHashes.append(tuple)
+                            // Signal the semaphore to indicate that the task is finished and a new task can start
+                            semaphore.signal()
+                        }
+                     }
+                }
+
+                // Signal the semaphore to indicate that the task is finished and a new task can start
+              semaphore.signal()
+            }
+        }
+    }
+    // Wait for all the image processing tasks to complete before returning the results
+    pHashGroup.wait()
+
+    // squeeze local cache to maxCacheSize elements
+    cache.updateUserDefaults()
 
     // Sort the pHashes array by index to restore the original order
     pHashes.sort { $0.index < $1.index }
@@ -287,8 +434,8 @@ public class ReactNativePhashModule: Module {
     return pHashes.map { $0.hash }
   }
 
-  func calcPHashesIterative(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, imageQuality: String) -> [String?] {
-      let cache = ImagePHashCache(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
+  func calcPHashesStringIterative(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, imageQuality: String) -> [String?] {
+      let cache = ImagePHashCache<String>(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
 
       func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
           switch hashAlgorithmName {
@@ -373,334 +520,79 @@ public class ReactNativePhashModule: Module {
       return pHashes
   }
 
-  func calcPHashesIterative1(imageAppleIds: [String], hashAlgorithmName: String) -> [String?] {
-      let imageHashing = OSImageHashing.sharedInstance()
+  func calcPHashesIterative(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, imageQuality: String) -> [OSHashType?] {
+      let cache = ImagePHashCache<OSHashType>(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
 
       func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
-        switch hashAlgorithmName {
-          case "dHash":
-              return imageHashing.hashImageData(imageData, with: .dHash)
-          case "pHash":
-              return imageHashing.hashImageData(imageData, with: .pHash)
-          default:
-              return imageHashing.hashImageData(imageData, with: .aHash)
-        }
+          switch hashAlgorithmName {
+              case "dHash":
+                  return imageHashing.hashImageData(imageData, with: .dHash)
+              case "pHash":
+                  return imageHashing.hashImageData(imageData, with: .pHash)
+              default:
+                  return imageHashing.hashImageData(imageData, with: .aHash)
+          }
       }
 
-      var pHashes: [String?] = []
+      var pHashes = [OSHashType?]()
 
       let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
+      var finishedImageCount = 0
 
-      fetchResult.enumerateObjects{  (asset, count, stop) in
-        // assuming you have a `PHAsset` instance called `asset`:
-        let options = PHImageRequestOptions()
-        options.isSynchronous = true // ensure the result is returned immediately
-        PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (imageData, dataUTI, orientation, info) in
-            guard let imageData = imageData else {
-                // handle error
-                pHashes.append(nil)
-                return
-            }
-
-            // process the image data
-            let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
-            let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
-            let pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
-
-            pHashes.append(pHash)
-            self.sendEvent("pHash-calculated", [
-              "finished": count + 1,
-              "total": imageAppleIds.count
-            ])
-        }
-      }
-
-      return pHashes
-  }
-
-  func calcPHashesIterative2(imageAppleIds: [String], hashAlgorithmName: String) -> [String?] {
-      let imageHashing = OSImageHashing.sharedInstance()
-
-      func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
-        switch hashAlgorithmName {
-          case "dHash":
-              return imageHashing.hashImageData(imageData, with: .dHash)
-          case "pHash":
-              return imageHashing.hashImageData(imageData, with: .pHash)
-          default:
-              return imageHashing.hashImageData(imageData, with: .aHash)
-        }
-      }
-
-      var pHashes: [String?] = []
-
-      let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
+      self.sendEvent("pHash-calculated", [
+          "finished": 0,
+          "total": imageAppleIds.count
+      ])
 
       fetchResult.enumerateObjects{  (asset, count, stop) in
           autoreleasepool {
               // assuming you have a `PHAsset` instance called `asset`:
               let options = PHImageRequestOptions()
-              options.isSynchronous = true // ensure the result is returned immediately
-              PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (imageData, dataUTI, orientation, info) in
-                  guard let imageData = imageData else {
-                      // handle error
-                      pHashes.append(nil)
-                      return
+
+              if imageQuality == "fastFormat" {
+                  options.deliveryMode = .fastFormat
+              } else {
+                  options.deliveryMode = .highQualityFormat
+              }
+              options.isSynchronous = true
+
+              var imageData: Data?
+
+              PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (data, dataUTI, orientation, info) in
+                  autoreleasepool {
+                    imageData = data
                   }
+              }
 
-                  // process the image data
-                  let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
-                  let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
-                  let pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
+              guard let imageData = imageData else {
+                  // handle error
+                  pHashes.append(nil)
 
-                  pHashes.append(pHash)
+                  finishedImageCount = finishedImageCount + 1;
                   self.sendEvent("pHash-calculated", [
-                    "finished": count + 1,
-                    "total": imageAppleIds.count
+                      "finished": finishedImageCount,
+                      "total": imageAppleIds.count
                   ])
-              }
-          }
-      }
-
-      return pHashes
-  }
-
-  func calcPHashesIterative3(imageAppleIds: [String], hashAlgorithmName: String) -> [String?] {
-      let imageHashing = OSImageHashing.sharedInstance()
-
-      func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
-        switch hashAlgorithmName {
-          case "dHash":
-              return imageHashing.hashImageData(imageData, with: .dHash)
-          case "pHash":
-              return imageHashing.hashImageData(imageData, with: .pHash)
-          default:
-              return imageHashing.hashImageData(imageData, with: .aHash)
-        }
-      }
-
-      var pHashes: [String?] = []
-
-      let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
-
-      fetchResult.enumerateObjects{  (asset, count, stop) in
-          // assuming you have a `PHAsset` instance called `asset`:
-          let options = PHImageRequestOptions()
-          options.isSynchronous = true // ensure the result is returned immediately
-
-          var imageData: Data?
-
-          PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (data, dataUTI, orientation, info) in
-              autoreleasepool {
-                imageData = data
-              }
-          }
-
-          guard let imageData = imageData else {
-              // handle error
-              pHashes.append(nil)
-              return
-          }
-
-          // process the image data
-          let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
-          let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
-          let pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
-
-          pHashes.append(pHash)
-          self.sendEvent("pHash-calculated", [
-            "finished": count + 1,
-            "total": imageAppleIds.count
-          ])
-      }
-
-      return pHashes
-  }
-
-  func calcPHashesIterative4(imageAppleIds: [String], hashAlgorithmName: String) -> [String?] {
-      let imageHashing = OSImageHashing.sharedInstance()
-
-      func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
-        switch hashAlgorithmName {
-          case "dHash":
-              return imageHashing.hashImageData(imageData, with: .dHash)
-          case "pHash":
-              return imageHashing.hashImageData(imageData, with: .pHash)
-          default:
-              return imageHashing.hashImageData(imageData, with: .aHash)
-        }
-      }
-
-      var pHashes: [String?] = []
-
-      let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
-
-      fetchResult.enumerateObjects{  (asset, count, stop) in
-          autoreleasepool {
-              // assuming you have a `PHAsset` instance called `asset`:
-              let options = PHImageRequestOptions()
-              options.isSynchronous = true // ensure the result is returned immediately
-
-              var imageData: Data?
-
-              PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (data, dataUTI, orientation, info) in
-                  autoreleasepool {
-                    imageData = data
-                  }
-              }
-
-              guard let imageData = imageData else {
-                  // handle error
-                  pHashes.append(nil)
                   return
               }
 
-              // process the image data
-              let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
-              let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
-			  let pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
+              let cacheKey = "\(asset.localIdentifier)_\(hashAlgorithmName)"
+              var pHash: OSHashType
 
-              pHashes.append(pHash)
-              self.sendEvent("pHash-calculated", [
-                "finished": count + 1,
-                "total": imageAppleIds.count
-              ])
-          }
-      }
-
-      return pHashes
-  }
-
-  func calcPHashesIterative5(imageAppleIds: [String], hashAlgorithmName: String, imageQuality: String) -> [String?] {
-      let imageHashing = OSImageHashing.sharedInstance()
-
-      func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
-        switch hashAlgorithmName {
-          case "dHash":
-              return imageHashing.hashImageData(imageData, with: .dHash)
-          case "pHash":
-              return imageHashing.hashImageData(imageData, with: .pHash)
-          default:
-              return imageHashing.hashImageData(imageData, with: .aHash)
-        }
-      }
-
-      var pHashes: [String?] = []
-
-      let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
-
-      fetchResult.enumerateObjects{  (asset, count, stop) in
-          autoreleasepool {
-              // assuming you have a `PHAsset` instance called `asset`:
-              let options = PHImageRequestOptions()
-              options.isSynchronous = true // ensure the result is returned immediately
-              if imageQuality == "fastFormat" {
-                  options.deliveryMode = .fastFormat
+              if let cachedHash = cache.get(for: cacheKey) {
+                  pHash = cachedHash
               } else {
-                  options.deliveryMode = .highQualityFormat
-              }
-
-              var imageData: Data?
-
-              PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (data, dataUTI, orientation, info) in
-                  autoreleasepool {
-                    imageData = data
-                  }
-              }
-
-              guard let imageData = imageData else {
-                  // handle error
-                  pHashes.append(nil)
-                  return
-              }
-
-              // process the image data
-              let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
-              let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
-              let pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
-
-              pHashes.append(pHash)
-              self.sendEvent("pHash-calculated", [
-                "finished": count + 1,
-                "total": imageAppleIds.count
-              ])
-          }
-      }
-
-      return pHashes
-  }
-
-  func calcPHashesIterative6(imageAppleIds: [String], hashAlgorithmName: String, imageQuality: String, storageIdentifier: String, maxCacheSize: Int) -> [String?] {
-      let cache = ImagePHashCache(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
-      let imageHashing = OSImageHashing.sharedInstance()
-
-      func calcPerceptualHash(imageData: Data, hashAlgorithmName: String) -> OSHashType {
-        switch hashAlgorithmName {
-          case "dHash":
-              return imageHashing.hashImageData(imageData, with: .dHash)
-          case "pHash":
-              return imageHashing.hashImageData(imageData, with: .pHash)
-          default:
-              return imageHashing.hashImageData(imageData, with: .aHash)
-        }
-      }
-
-      var pHashes: [String?] = []
-
-      let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
-
-      fetchResult.enumerateObjects{  (asset, count, stop) in
-          autoreleasepool {
-              // assuming you have a `PHAsset` instance called `asset`:
-              let options = PHImageRequestOptions()
-              options.isSynchronous = true // ensure the result is returned immediately
-              if imageQuality == "fastFormat" {
-                  options.deliveryMode = .fastFormat
-              } else {
-                  options.deliveryMode = .highQualityFormat
-              }
-
-              var imageData: Data?
-
-              PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (data, dataUTI, orientation, info) in
-                  autoreleasepool {
-                    imageData = data
-                  }
-              }
-
-              guard let imageData = imageData else {
-                  // handle error
-                  pHashes.append(nil)
-                  return
-              }
-
-              var pHash: String
-
-              if (!cache.isDisabled) {
-                  let cacheKey = "\(asset.localIdentifier)_\(hashAlgorithmName)"
-                  var cachedHash: String?
-
-                  cachedHash = cache.get(for: cacheKey)
-
-                  if cachedHash != nil {
-                      pHash = cachedHash!
-                  } else {
-                      let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
-                      let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
-                      pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
-                  }
-
+                  pHash = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
                   cache.set(for: cacheKey, value: pHash)
-              } else {
-                  let pHashRaw = calcPerceptualHash(imageData: imageData, hashAlgorithmName: hashAlgorithmName)
-                  let pHashCropped = String(pHashRaw, radix: 2).replacingOccurrences(of: "-", with: "")
-                  pHash = pHashCropped.padding(toLength: 64, withPad: "0", startingAt: 0)
               }
 
+              // append the pHash and the index of the corresponding asset to the pHashes array
               pHashes.append(pHash)
+
+              finishedImageCount = finishedImageCount + 1;
               self.sendEvent("pHash-calculated", [
-                "finished": count + 1,
-                "total": imageAppleIds.count
+                  "finished": finishedImageCount,
+                  "total": imageAppleIds.count
               ])
           }
       }
@@ -708,7 +600,90 @@ public class ReactNativePhashModule: Module {
       // squeeze local cache to maxCacheSize elements
       cache.updateUserDefaults()
 
+      // Return an array of pHash values without the index
       return pHashes
+  }
+
+  func findDuplicatesIterative(imageAppleIds: [String], maxCacheSize: Int, storageIdentifier: String) -> [[String]] {
+    let cache = ImagePHashCache<String>(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
+
+    var duplicates = [[String]]()
+
+    let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
+    var finishedImageCount = 0
+
+    self.sendEvent("md5-calculated", [
+        "finished": 0,
+        "total": imageAppleIds.count
+    ])
+
+	var imageHashesMap = [String: [String]]()
+
+    fetchResult.enumerateObjects{  (asset, count, stop) in
+        autoreleasepool {
+            // assuming you have a `PHAsset` instance called `asset`:
+            var imageData: Data?
+
+            let options = PHImageRequestOptions()
+
+            options.isSynchronous = true
+
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { (data, dataUTI, orientation, info) in
+                autoreleasepool {
+                  imageData = data
+                }
+            }
+
+            guard let imageData = imageData else {
+                // handle error
+                finishedImageCount = finishedImageCount + 1;
+                self.sendEvent("md5-calculated", [
+                    "finished": finishedImageCount,
+                    "total": imageAppleIds.count
+                ])
+                return
+            }
+
+            let cacheKey = "\(asset.localIdentifier)_md5"
+            var hash: String
+
+            if let cachedHash = cache.get(for: cacheKey) {
+                hash = cachedHash
+            } else {
+                hash = imageData.md5()
+                cache.set(for: cacheKey, value: hash)
+            }
+
+            if (imageHashesMap[hash] == nil) {
+              imageHashesMap[hash] = [imageAppleIds[count]]
+            } else {
+              var appleIds = imageHashesMap[hash]!
+
+              appleIds.append(imageAppleIds[count])
+              imageHashesMap[hash] = appleIds
+            }
+
+            finishedImageCount = finishedImageCount + 1;
+            self.sendEvent("md5-calculated", [
+                "finished": finishedImageCount,
+                "total": imageAppleIds.count
+            ])
+        }
+    }
+
+    // squeeze local cache to maxCacheSize elements
+    cache.updateUserDefaults()
+
+	var hashes = [[String]]()
+
+	for (hash, appleIds) in imageHashesMap {
+		if (appleIds.count > 1) {
+			hashes.append(appleIds);
+		}
+    }
+
+    // Return an array of pHash values without the index
+    return hashes
   }
 
   public func definition() -> ModuleDefinition {
@@ -717,12 +692,12 @@ public class ReactNativePhashModule: Module {
     // The module will be accessible from `requireNativeModule('ReactNativePhash')` in JavaScript.
     Name("ReactNativePhash")
 
-    Events("pHash-calculated", "find-similar-iteration")
+    Events("pHash-calculated", "find-similar-iteration", "md5-calculated")
 
     // Defines a JavaScript function that always returns a Promise and whose native code
     // is by default dispatched on the different thread than the JavaScript runtime runs on.
     AsyncFunction("getPHashesIterative") { (imageAppleIds: [String], options: FindSimilarOptions) -> [String?] in
-        let pHashes = calcPHashesIterative(
+        let pHashes = calcPHashesStringIterative(
           imageAppleIds: imageAppleIds,
           hashAlgorithmName: options.hashAlgorithmName,
           maxCacheSize: options.maxCacheSize,
@@ -732,61 +707,8 @@ public class ReactNativePhashModule: Module {
         return pHashes
     }
 
-    AsyncFunction("getPHashesIterative1") { (imageAppleIds: [String], options: FindSimilarOptions) -> [String?] in
-        let pHashes = calcPHashesIterative1(
-          imageAppleIds: imageAppleIds,
-          hashAlgorithmName: options.hashAlgorithmName
-        )
-        return pHashes
-    }
-
-    AsyncFunction("getPHashesIterative2") { (imageAppleIds: [String], options: FindSimilarOptions) -> [String?] in
-        let pHashes = calcPHashesIterative2(
-          imageAppleIds: imageAppleIds,
-          hashAlgorithmName: options.hashAlgorithmName
-        )
-        return pHashes
-    }
-
-    AsyncFunction("getPHashesIterative3") { (imageAppleIds: [String], options: FindSimilarOptions) -> [String?] in
-        let pHashes = calcPHashesIterative3(
-          imageAppleIds: imageAppleIds,
-          hashAlgorithmName: options.hashAlgorithmName
-        )
-        return pHashes
-    }
-
-    AsyncFunction("getPHashesIterative4") { (imageAppleIds: [String], options: FindSimilarOptions) -> [String?] in
-        let pHashes = calcPHashesIterative4(
-          imageAppleIds: imageAppleIds,
-          hashAlgorithmName: options.hashAlgorithmName
-        )
-        return pHashes
-    }
-
-    AsyncFunction("getPHashesIterative5") { (imageAppleIds: [String], options: FindSimilarOptions) -> [String?] in
-        let pHashes = calcPHashesIterative5(
-          imageAppleIds: imageAppleIds,
-          hashAlgorithmName: options.hashAlgorithmName,
-          imageQuality: options.imageQuality
-        )
-        return pHashes
-    }
-
-    AsyncFunction("getPHashesIterative6") { (imageAppleIds: [String], options: FindSimilarOptions) -> [String?] in
-        let pHashes = calcPHashesIterative6(
-          imageAppleIds: imageAppleIds,
-          hashAlgorithmName: options.hashAlgorithmName,
-          imageQuality: options.imageQuality,
-          storageIdentifier: options.storageIdentifier,
-          maxCacheSize: options.maxCacheSize
-        )
-        return pHashes
-    }
-
-
     AsyncFunction("getPHashesConcurrently") { (imageAppleIds: [String], options: FindSimilarOptions) -> [String?] in
-        let pHashes = calcPHashesConcurrently(
+        let pHashes = calcPHashesStringConcurrently(
           imageAppleIds: imageAppleIds,
           hashAlgorithmName: options.hashAlgorithmName,
           maxCacheSize: options.maxCacheSize,
@@ -798,8 +720,18 @@ public class ReactNativePhashModule: Module {
         return pHashes
     }
 
-    AsyncFunction("findSimilarIterative") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
-        let pHashes = calcPHashesIterative(
+    AsyncFunction("findDuplicatesIterative") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
+        let duplicates = findDuplicatesIterative(
+          imageAppleIds: imageAppleIds,
+
+          maxCacheSize: options.maxCacheSize,
+          storageIdentifier: options.storageIdentifier
+        )
+        return duplicates
+    }
+
+    AsyncFunction("findSimilarIterativeOld") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
+	    let pHashes = calcPHashesStringIterative(
           imageAppleIds: imageAppleIds,
           hashAlgorithmName: options.hashAlgorithmName,
           maxCacheSize: options.maxCacheSize,
@@ -808,13 +740,26 @@ public class ReactNativePhashModule: Module {
         )
 
         let maxHammingDistance = options.maxHammingDistance!
+        let hashAlgorithmName = options.hashAlgorithmName
+		let nearestK = options.nearestK!
+
         var similarImages = [[String]]()
+        var similarImagesMap = [String: Bool]()
 
         sendEvent("find-similar-iteration", [
           "finished": 0,
           "total": pHashes.count - 1
         ])
+
         for i in 0..<pHashes.count - 1 {
+            if (similarImagesMap[imageAppleIds[i]] != nil) {
+              sendEvent("find-similar-iteration", [
+                "finished": i + 1,
+                "total": pHashes.count - 1
+              ])
+              continue
+            }
+
             guard let pHash1 = pHashes[i] else {
                 sendEvent("find-similar-iteration", [
                   "finished": i + 1,
@@ -822,18 +767,40 @@ public class ReactNativePhashModule: Module {
                 ])
                 continue
             }
-			// WARNING: THIS FUNCTION RETURN REDUNDANT PAIRS
+
+            var collisions: [String] = [imageAppleIds[i]]
+
             for j in (i + 1)..<pHashes.count {
+                if (collisions.count >= nearestK) {
+                  break
+                }
+
+                if (similarImagesMap[imageAppleIds[j]] != nil) {
+                  continue
+                }
+
+                if (imageAppleIds[i] == imageAppleIds[j]) {
+                  continue
+                }
+
                 guard let pHash2 = pHashes[j], i < j else {
                     continue
                 }
 
                 let pHashDoubleArray1 = pHash1.map {Double(String($0)) ?? 0}
                 let pHashDoubleArray2 = pHash2.map {Double(String($0)) ?? 0}
-
                 let hammingDistance = calcHammingDistance(lhsData: pHashDoubleArray1, rhsData: pHashDoubleArray2)
+
                 if hammingDistance <= maxHammingDistance {
-                    similarImages.append([imageAppleIds[i], imageAppleIds[j]])
+                    collisions.append(imageAppleIds[j])
+                }
+            }
+
+            if (collisions.count >= 2) {
+                similarImages.append(collisions)
+
+                for collision in collisions {
+                  similarImagesMap[collision] = true
                 }
             }
 
@@ -847,7 +814,7 @@ public class ReactNativePhashModule: Module {
     }
 
     AsyncFunction("findSimilarIterativeKDTree") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
-        let pHashes = calcPHashesIterative(
+        let pHashes = calcPHashesStringIterative(
           imageAppleIds: imageAppleIds,
           hashAlgorithmName: options.hashAlgorithmName,
           maxCacheSize: options.maxCacheSize,
@@ -923,7 +890,7 @@ public class ReactNativePhashModule: Module {
     }
 
     AsyncFunction("findSimilarConcurrentlyPartial") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
-        let pHashes = calcPHashesConcurrently(
+        let pHashes = calcPHashesStringConcurrently(
           imageAppleIds: imageAppleIds,
           hashAlgorithmName: options.hashAlgorithmName,
           maxCacheSize: options.maxCacheSize,
@@ -997,13 +964,13 @@ public class ReactNativePhashModule: Module {
         return similarImages
     }
 
-    AsyncFunction("findSimilarConcurrently") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
+    AsyncFunction("findSimilarConcurrentlyOld") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
         let concurrentBatchSize = options.concurrentBatchSize!
         let maxHammingDistance = options.maxHammingDistance!
         let maxConcurrent = options.maxConcurrent!
         let nearestK = options.nearestK!
 
-        let pHashes = calcPHashesConcurrently(
+        let pHashes = calcPHashesStringConcurrently(
           imageAppleIds: imageAppleIds,
           hashAlgorithmName: options.hashAlgorithmName,
           maxCacheSize: options.maxCacheSize,
@@ -1122,6 +1089,170 @@ public class ReactNativePhashModule: Module {
         }
 
         return refactoredSimilarImages
+    }
+
+    AsyncFunction("findSimilarConcurrently") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
+        let pHashes = calcPHashesConcurrently(
+          imageAppleIds: imageAppleIds,
+          hashAlgorithmName: options.hashAlgorithmName,
+          maxCacheSize: options.maxCacheSize,
+          storageIdentifier: options.storageIdentifier,
+          concurrentBatchSize: options.concurrentBatchSize!,
+          maxConcurrent: options.maxConcurrent!,
+          imageQuality: options.imageQuality
+        );
+
+        let maxHammingDistance = options.maxHammingDistance!
+		let nearestK = options.nearestK!
+		let hashAlgorithmName = options.hashAlgorithmName
+        var similarImages = [[String]]()
+		var similarImagesMap = [String: Bool]()
+
+        sendEvent("find-similar-iteration", [
+          "finished": 0,
+          "total": pHashes.count - 1
+        ])
+
+        for i in 0..<pHashes.count - 1 {
+            if (similarImagesMap[imageAppleIds[i]] != nil) {
+              sendEvent("find-similar-iteration", [
+                "finished": i + 1,
+                "total": pHashes.count - 1
+              ])
+              continue
+            }
+
+            guard let pHash1 = pHashes[i] else {
+                sendEvent("find-similar-iteration", [
+                  "finished": i + 1,
+                  "total": pHashes.count - 1
+                ])
+                continue
+            }
+
+            var collisions: [String] = [imageAppleIds[i]]
+
+            for j in (i + 1)..<pHashes.count {
+                if (collisions.count > nearestK) {
+                  break
+                }
+
+                if (similarImagesMap[imageAppleIds[j]] != nil) {
+                  continue
+                }
+
+                if (imageAppleIds[i] == imageAppleIds[j]) {
+                  continue
+                }
+
+                guard let pHash2 = pHashes[j], i < j else {
+                    continue
+                }
+
+                let hammingDistance = calcHammingDistance(lhsData: pHash1, rhsData: pHash2, hashAlgorithmName: hashAlgorithmName)
+
+                if hammingDistance <= maxHammingDistance {
+                    collisions.append(imageAppleIds[j])
+                }
+            }
+
+            if (collisions.count >= 2) {
+                similarImages.append(collisions)
+
+                for collision in collisions {
+                  similarImagesMap[collision] = true
+                }
+            }
+
+            sendEvent("find-similar-iteration", [
+              "finished": i + 1,
+              "total": pHashes.count - 1
+            ])
+        }
+
+        return similarImages
+    }
+
+    AsyncFunction("findSimilarIterative") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in
+        let pHashes = calcPHashesIterative(
+          imageAppleIds: imageAppleIds,
+          hashAlgorithmName: options.hashAlgorithmName,
+          maxCacheSize: options.maxCacheSize,
+          storageIdentifier: options.storageIdentifier,
+          imageQuality: options.imageQuality
+        )
+
+        let maxHammingDistance = options.maxHammingDistance!
+		let nearestK = options.nearestK!
+		let hashAlgorithmName = options.hashAlgorithmName
+
+        var similarImages = [[String]]()
+        var similarImagesMap = [String: Bool]()
+
+
+        sendEvent("find-similar-iteration", [
+          "finished": 0,
+          "total": pHashes.count - 1
+        ])
+
+        for i in 0..<pHashes.count - 1 {
+            if (similarImagesMap[imageAppleIds[i]] != nil) {
+              sendEvent("find-similar-iteration", [
+                "finished": i + 1,
+                "total": pHashes.count - 1
+              ])
+              continue
+            }
+
+            guard let pHash1 = pHashes[i] else {
+                sendEvent("find-similar-iteration", [
+                  "finished": i + 1,
+                  "total": pHashes.count - 1
+                ])
+                continue
+            }
+
+            var collisions: [String] = [imageAppleIds[i]]
+
+            for j in (i + 1)..<pHashes.count {
+                if (collisions.count >= nearestK) {
+                  break
+                }
+
+                if (similarImagesMap[imageAppleIds[j]] != nil) {
+                  continue
+                }
+
+                if (imageAppleIds[i] == imageAppleIds[j]) {
+                  continue
+                }
+
+                guard let pHash2 = pHashes[j], i < j else {
+                    continue
+                }
+
+                let hammingDistance = calcHammingDistance(lhsData: pHash1, rhsData: pHash2, hashAlgorithmName: hashAlgorithmName)
+
+                if hammingDistance <= maxHammingDistance {
+                    collisions.append(imageAppleIds[j])
+                }
+            }
+
+            if (collisions.count >= 2) {
+                similarImages.append(collisions)
+
+                for collision in collisions {
+                  similarImagesMap[collision] = true
+                }
+            }
+
+            sendEvent("find-similar-iteration", [
+              "finished": i + 1,
+              "total": pHashes.count - 1
+            ])
+        }
+
+        return similarImages
     }
   }
 }
