@@ -9,7 +9,9 @@ import {
   findSimilarIterativeKDTree,
   findSimilarConcurrentlyPartial,
   addListener,
-  findSimilarConcurrently, getImagesDuplicatesIterative
+  findSimilarConcurrently,
+  getImagesDuplicatesIterative,
+  findSimilarConcurrently2,
 } from "react-native-phash";
 
 const pHashCalculatedSubscription = addListener(
@@ -167,6 +169,27 @@ const calcAndLog7 = async () => {
     mediaType: "photo",
   });
 
+  const similarImagesKDTree = await findSimilarConcurrently2(
+    assets.map((asset) => asset.id),
+    {
+      maxCacheSize: 0,
+      concurrentBatchSize: 50,
+      maxConcurrent: 100,
+      nearestK: 10,
+      hashAlgorithmName: "pHash",
+      maxHammingDistance: 1,
+    }
+  );
+  console.log(JSON.stringify(similarImagesKDTree, null, 2));
+  console.log(similarImagesKDTree.length);
+};
+
+const calcAndLog8 = async () => {
+  const { assets } = await MediaLibrary.getAssetsAsync({
+    first: 1000,
+    mediaType: "photo",
+  });
+
   const duplicates = await getImagesDuplicatesIterative(
     assets.map((asset) => asset.id),
     {
@@ -196,7 +219,8 @@ export default function App() {
       <Button title={"findSimilarIterativeKDTree"} onPress={calcAndLog4}/>
       <Button title={"findSimilarConcurrentlyPartial"} onPress={calcAndLog5}/>
       <Button title={"findSimilarConcurrently"} onPress={calcAndLog6}/>
-      <Button title={"getImagesDuplicatesIterative"} onPress={calcAndLog7}/>
+      <Button title={"findSimilarConcurrently2"} onPress={calcAndLog7}/>
+      <Button title={"getImagesDuplicatesIterative"} onPress={calcAndLog8}/>
     </View>
   );
 }

@@ -317,3 +317,33 @@ export async function findSimilarConcurrently(
     nearestK,
   });
 }
+
+export async function findSimilarConcurrently2(
+  imageAppleIds: string | string[],
+  {
+    maxHammingDistance = 5,
+    hashAlgorithmName = "dHash",
+    nearestK = 1,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    concurrentBatchSize = 10,
+    maxConcurrent = 10,
+    imageQuality = "highQualityFormat",
+  }: FindSimilarConcurrentlyOptions = {}
+): Promise<string[][]> {
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+  maxConcurrent = Math.max(1, maxConcurrent);
+  concurrentBatchSize = Math.max(1, concurrentBatchSize);
+
+  return ReactNativePhashModule.findSimilarConcurrently2(appleIds, {
+    maxHammingDistance,
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    concurrentBatchSize,
+    maxConcurrent,
+    imageQuality,
+    nearestK,
+  });
+}
