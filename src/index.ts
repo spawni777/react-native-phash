@@ -18,10 +18,7 @@ export type NearestK = Range<1, 100>;
 export type MaxHammingDistance = Range<1, 64>;
 export type HashAlgorithmName = "dHash" | "pHash" | "aHash";
 
-type EventNameEnum =
-  | "pHash-calculated"
-  | "find-similar-iteration"
-  | "md5-calculated";
+type EventNameEnum = "pHash-calculated" | "md5-calculated";
 
 type PHashEvent = {
   finished: number;
@@ -30,7 +27,6 @@ type PHashEvent = {
 
 type ReturnEventMap = {
   "pHash-calculated": PHashEvent;
-  "find-similar-iteration": PHashEvent;
   "md5-calculated": PHashEvent;
 };
 
@@ -50,7 +46,6 @@ function makeId(length) {
 const emitter = new EventEmitter(ReactNativePhashModule);
 // add clear listeners to remove warnings
 emitter.addListener<"pHash-calculated">("pHash-calculated", () => {});
-emitter.addListener<"pHash-calculated">("find-similar-iteration", () => {});
 emitter.addListener<"md5-calculated">("md5-calculated", () => {});
 
 export const subscriptions: { [key: string]: Subscription } = {};
@@ -100,7 +95,7 @@ export type HashOptions = {
 export async function getImagesDuplicatesIterative(
   imageAppleIds: string | string[],
   { maxCacheSize = 10000, storageIdentifier = "Spawni-Hash" }: HashOptions = {}
-): Promise<string[]> {
+): Promise<string[][]> {
   const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
   maxCacheSize = Math.max(0, maxCacheSize);
 

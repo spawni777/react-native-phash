@@ -859,7 +859,7 @@ public class ReactNativePhashModule: Module {
     // The module will be accessible from `requireNativeModule('ReactNativePhash')` in JavaScript.
     Name("ReactNativePhash")
 
-    Events("pHash-calculated", "find-similar-iteration", "md5-calculated")
+    Events("pHash-calculated", "md5-calculated")
 
     // Defines a JavaScript function that always returns a Promise and whose native code
     // is by default dispatched on the different thread than the JavaScript runtime runs on.
@@ -912,25 +912,12 @@ public class ReactNativePhashModule: Module {
         var similarImages = [[String]]()
         var similarImagesMap = [String: Bool]()
 
-        sendEvent("find-similar-iteration", [
-          "finished": 0,
-          "total": pHashes.count - 1
-        ])
-
         for i in 0..<pHashes.count - 1 {
             if (similarImagesMap[imageAppleIds[i]] != nil) {
-              sendEvent("find-similar-iteration", [
-                "finished": i + 1,
-                "total": pHashes.count - 1
-              ])
               continue
             }
 
             guard let pHash1 = pHashes[i] else {
-                sendEvent("find-similar-iteration", [
-                  "finished": i + 1,
-                  "total": pHashes.count - 1
-                ])
                 continue
             }
 
@@ -969,11 +956,6 @@ public class ReactNativePhashModule: Module {
                   similarImagesMap[collision] = true
                 }
             }
-
-            sendEvent("find-similar-iteration", [
-              "finished": i + 1,
-              "total": pHashes.count - 1
-            ])
         }
 
         return similarImages
@@ -1007,17 +989,8 @@ public class ReactNativePhashModule: Module {
         var similarImages = [[String]]()
         var foundSimilarityIdsHashMap = [String: Int]()
 
-
-        sendEvent("find-similar-iteration", [
-          "finished": 0,
-          "total": points64D.count
-        ])
         for (pointIndex, point) in points64D.enumerated() {
             if foundSimilarityIdsHashMap[point.appleId] != nil {
-                sendEvent("find-similar-iteration", [
-                  "finished": pointIndex + 1,
-                  "total": points64D.count
-                ])
                 continue
             }
             foundSimilarityIdsHashMap[point.appleId] = 1;
@@ -1044,11 +1017,6 @@ public class ReactNativePhashModule: Module {
                 if (collisions.count >= 2) {
                   similarImages.append(collisions)
                 }
-
-                sendEvent("find-similar-iteration", [
-                  "finished": pointIndex + 1,
-                  "total": points64D.count
-                ])
             }
         }
 
@@ -1084,17 +1052,8 @@ public class ReactNativePhashModule: Module {
         var similarImages = [[String]]()
         var foundSimilarityIdsHashMap = [String: Int]()
 
-
-        sendEvent("find-similar-iteration", [
-          "finished": 0,
-          "total": points64D.count
-        ])
         for (pointIndex, point) in points64D.enumerated() {
           if foundSimilarityIdsHashMap[point.appleId] != nil {
-              sendEvent("find-similar-iteration", [
-                "finished": pointIndex + 1,
-                "total": points64D.count
-              ])
               continue
           }
           foundSimilarityIdsHashMap[point.appleId] = 1;
@@ -1120,11 +1079,6 @@ public class ReactNativePhashModule: Module {
           if (collisions.count >= 2) {
             similarImages.append(collisions)
           }
-
-          sendEvent("find-similar-iteration", [
-            "finished": pointIndex + 1,
-            "total": points64D.count
-          ])
         }
 
         return similarImages
@@ -1174,11 +1128,6 @@ public class ReactNativePhashModule: Module {
         var similarImages = [[String]]()
         var finishedImageCount = 0;
 
-
-        sendEvent("find-similar-iteration", [
-          "finished": 0,
-          "total": points64D.count
-        ])
         for batchIndex in 0..<batchCount {
             semaphore.wait()
 
@@ -1217,10 +1166,6 @@ public class ReactNativePhashModule: Module {
                             }
 							// WARNING. REMOVE THIS IF CRUSH?!?!?!?
                             finishedImageCount = finishedImageCount + 1;
-                            self.sendEvent("find-similar-iteration", [
-                              "finished": finishedImageCount,
-                              "total": points64D.count
-                            ])
                         }
                     }
 
@@ -1274,25 +1219,12 @@ public class ReactNativePhashModule: Module {
         var similarImages = [[String]]()
 		var similarImagesMap = [String: Bool]()
 
-        sendEvent("find-similar-iteration", [
-          "finished": 0,
-          "total": pHashes.count - 1
-        ])
-
         for i in 0..<pHashes.count - 1 {
             if (similarImagesMap[imageAppleIds[i]] != nil) {
-              sendEvent("find-similar-iteration", [
-                "finished": i + 1,
-                "total": pHashes.count - 1
-              ])
               continue
             }
 
             guard let pHash1 = pHashes[i] else {
-                sendEvent("find-similar-iteration", [
-                  "finished": i + 1,
-                  "total": pHashes.count - 1
-                ])
                 continue
             }
 
@@ -1329,11 +1261,6 @@ public class ReactNativePhashModule: Module {
                   similarImagesMap[collision] = true
                 }
             }
-
-            sendEvent("find-similar-iteration", [
-              "finished": i + 1,
-              "total": pHashes.count - 1
-            ])
         }
 
         return similarImages
@@ -1356,25 +1283,12 @@ public class ReactNativePhashModule: Module {
         var similarImages = [[String]]()
         var similarImagesMap = [String: Bool]()
 
-        sendEvent("find-similar-iteration", [
-          "finished": 0,
-          "total": pHashes.count - 1
-        ])
-
         for i in 0..<pHashes.count - 1 {
             if (similarImagesMap[imageAppleIds[i]] != nil) {
-              sendEvent("find-similar-iteration", [
-                "finished": i + 1,
-                "total": pHashes.count - 1
-              ])
               continue
             }
 
             guard let pHash1 = pHashes[i] else {
-                sendEvent("find-similar-iteration", [
-                  "finished": i + 1,
-                  "total": pHashes.count - 1
-                ])
                 continue
             }
 
@@ -1411,11 +1325,6 @@ public class ReactNativePhashModule: Module {
                   similarImagesMap[collision] = true
                 }
             }
-
-            sendEvent("find-similar-iteration", [
-              "finished": i + 1,
-              "total": pHashes.count - 1
-            ])
         }
 
         return similarImages
@@ -1437,26 +1346,12 @@ public class ReactNativePhashModule: Module {
         var similarImages = [[String]]()
         var similarImagesMap = [String: Bool]()
 
-
-        sendEvent("find-similar-iteration", [
-          "finished": 0,
-          "total": pHashes.count - 1
-        ])
-
         for i in 0..<pHashes.count - 1 {
             if (similarImagesMap[imageAppleIds[i]] != nil) {
-              sendEvent("find-similar-iteration", [
-                "finished": i + 1,
-                "total": pHashes.count - 1
-              ])
               continue
             }
 
             guard let pHash1 = pHashes[i] else {
-                sendEvent("find-similar-iteration", [
-                  "finished": i + 1,
-                  "total": pHashes.count - 1
-                ])
                 continue
             }
 
@@ -1493,11 +1388,6 @@ public class ReactNativePhashModule: Module {
                   similarImagesMap[collision] = true
                 }
             }
-
-            sendEvent("find-similar-iteration", [
-              "finished": i + 1,
-              "total": pHashes.count - 1
-            ])
         }
 
         return similarImages

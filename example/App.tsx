@@ -39,18 +39,6 @@ const hashCalculatedSubscription = addListener(
   }
 );
 
-const findSimilarIterationSubscription = addListener(
-  "find-similar-iteration",
-  ({ finished, total }) => {
-    const percentage = Math.floor((finished / total) * 10000) / 100;
-    console.log(`find-similar-iteration: ${percentage}%`);
-
-    // if (percentage >= 100) {
-    //   findSimilarIterationSubscription.remove();
-    // }
-  }
-);
-
 const calcAndLog1 = async () => {
   const { assets } = await MediaLibrary.getAssetsAsync({
     first: 200,
