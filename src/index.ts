@@ -92,7 +92,7 @@ export type HashOptions = {
   storageIdentifier?: string;
 };
 
-export async function getImagesDuplicatesIterative(
+export async function findDuplicates(
   imageAppleIds: string | string[],
   { maxCacheSize = 10000, storageIdentifier = "Spawni-Hash" }: HashOptions = {}
 ): Promise<string[][]> {
@@ -102,6 +102,37 @@ export async function getImagesDuplicatesIterative(
   return ReactNativePhashModule.findDuplicatesIterative(appleIds, {
     maxCacheSize,
     storageIdentifier,
+  });
+}
+
+type DuplicatesFlexibleOptions = HashOptions & {
+  contentMode?: "aspectFit" | "aspectFill";
+  targetSizeHeight?: number;
+  targetSizeWidth?: number;
+  imageQuality?: "fastFormat" | "highQualityFormat";
+};
+
+export async function findDuplicatesFlexible(
+  imageAppleIds: string | string[],
+  {
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-Hash",
+    contentMode = "aspectFit",
+    targetSizeHeight = 64,
+    targetSizeWidth = 64,
+    imageQuality = "fastFormat",
+  }: DuplicatesFlexibleOptions = {}
+): Promise<string[][]> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.findDuplicatesIterativeFlexible(appleIds, {
+    maxCacheSize,
+    storageIdentifier,
+    contentMode,
+    targetSizeHeight,
+    targetSizeWidth,
+    imageQuality,
   });
 }
 
@@ -218,6 +249,42 @@ export async function findSimilarIterativeKDTree(
   });
 }
 
+type FindSimilarKDTreeFlexibleOptions = FindSimilarKDTreeOptions & {
+  contentMode?: "aspectFit" | "aspectFill";
+  targetSizeHeight?: number;
+  targetSizeWidth?: number;
+};
+
+export async function findSimilarIterativeKDTreeFlexible(
+  imageAppleIds: string | string[],
+  {
+    maxHammingDistance = 5,
+    hashAlgorithmName = "dHash",
+    nearestK = 1,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    imageQuality = "highQualityFormat",
+    contentMode = "aspectFill",
+    targetSizeHeight = 64,
+    targetSizeWidth = 64,
+  }: FindSimilarKDTreeFlexibleOptions = {}
+): Promise<string[][]> {
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.findSimilarIterativeKDTreeFlexible(appleIds, {
+    maxHammingDistance,
+    hashAlgorithmName,
+    maxCacheSize,
+    storageIdentifier,
+    imageQuality,
+    nearestK,
+    contentMode,
+    targetSizeHeight,
+    targetSizeWidth,
+  });
+}
+
 type FindSimilarConcurrentlyOptions = FindSimilarKDTreeOptions & {
   concurrentBatchSize?: number;
   maxConcurrent?: number;
@@ -253,7 +320,7 @@ export async function findSimilarConcurrentlyPartial(
   });
 }
 
-export async function findSimilarConcurrentlyOld(
+export async function findSimilarConcurrentlyKDTree(
   imageAppleIds: string | string[],
   {
     maxHammingDistance = 5,
@@ -271,7 +338,7 @@ export async function findSimilarConcurrentlyOld(
   maxConcurrent = Math.max(1, maxConcurrent);
   concurrentBatchSize = Math.max(1, concurrentBatchSize);
 
-  return ReactNativePhashModule.findSimilarConcurrentlyOld(appleIds, {
+  return ReactNativePhashModule.findSimilarConcurrentlyKDTree(appleIds, {
     maxHammingDistance,
     hashAlgorithmName,
     maxCacheSize,
@@ -313,7 +380,13 @@ export async function findSimilarConcurrently(
   });
 }
 
-export async function findSimilarConcurrently2(
+type FindSimilarConcurrentlyFlexibleOptions = FindSimilarConcurrentlyOptions & {
+  contentMode?: "aspectFit" | "aspectFill";
+  targetSizeHeight?: number;
+  targetSizeWidth?: number;
+};
+
+export async function findSimilarConcurrentlyFlexible(
   imageAppleIds: string | string[],
   {
     maxHammingDistance = 5,
@@ -324,14 +397,17 @@ export async function findSimilarConcurrently2(
     concurrentBatchSize = 10,
     maxConcurrent = 10,
     imageQuality = "highQualityFormat",
-  }: FindSimilarConcurrentlyOptions = {}
+    contentMode = "aspectFill",
+    targetSizeHeight = 64,
+    targetSizeWidth = 64,
+  }: FindSimilarConcurrentlyFlexibleOptions = {}
 ): Promise<string[][]> {
   const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
   maxCacheSize = Math.max(0, maxCacheSize);
   maxConcurrent = Math.max(1, maxConcurrent);
   concurrentBatchSize = Math.max(1, concurrentBatchSize);
 
-  return ReactNativePhashModule.findSimilarConcurrently2(appleIds, {
+  return ReactNativePhashModule.findSimilarConcurrentlyFlexible(appleIds, {
     maxHammingDistance,
     hashAlgorithmName,
     maxCacheSize,
@@ -340,5 +416,8 @@ export async function findSimilarConcurrently2(
     maxConcurrent,
     imageQuality,
     nearestK,
+    contentMode,
+    targetSizeHeight,
+    targetSizeWidth,
   });
 }
