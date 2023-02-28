@@ -1,6 +1,6 @@
 import * as MediaLibrary from "expo-media-library";
-import { useEffect } from "react";
-import { Button, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Button, Image, ScrollView, StyleSheet, Text, View, SafeAreaView } from "react-native";
 // import * as ReactNativePhash from "react-native-phash";
 import {
   getImagesPHashIterative,
@@ -9,9 +9,12 @@ import {
   findSimilarIterativeKDTree,
   findSimilarConcurrentlyPartial,
   addListener,
+  findSimilarIterativeKDTreeFlexible,
   findSimilarConcurrently,
   findSimilarConcurrentlyFlexible,
-  findDuplicatesFlexible, groupPhotos
+  findDuplicatesFlexible,
+  findDuplicates,
+  groupPhotos,
 } from "react-native-phash";
 
 const pHashCalculatedSubscription = addListener(
@@ -90,25 +93,6 @@ const calcAndLog3 = async () => {
   console.log(similarImages.length);
 };
 
-const calcAndLog4 = async () => {
-  const { assets } = await MediaLibrary.getAssetsAsync({
-    first: 1000,
-    mediaType: "photo",
-  });
-
-  const similarImagesKDTree = await findSimilarIterativeKDTree(
-    assets.map((asset) => asset.id),
-    {
-      maxCacheSize: 0,
-      nearestK: 1,
-      maxHammingDistance: 1,
-      hashAlgorithmName: "pHash",
-    }
-  );
-  console.log(JSON.stringify(similarImagesKDTree, null, 2));
-  console.log(similarImagesKDTree.length);
-};
-
 const calcAndLog5 = async () => {
   const { assets } = await MediaLibrary.getAssetsAsync({
     first: 1000,
@@ -151,43 +135,6 @@ const calcAndLog6 = async () => {
   console.log(similarImagesKDTree.length);
 };
 
-const calcAndLog7 = async () => {
-  const { assets } = await MediaLibrary.getAssetsAsync({
-    first: 1000,
-    mediaType: "photo",
-  });
-
-  const similarImagesKDTree = await findSimilarConcurrentlyFlexible(
-    assets.map((asset) => asset.id),
-    {
-      maxCacheSize: 0,
-      concurrentBatchSize: 50,
-      maxConcurrent: 100,
-      nearestK: 10,
-      hashAlgorithmName: "pHash",
-      maxHammingDistance: 1,
-    }
-  );
-  console.log(JSON.stringify(similarImagesKDTree, null, 2));
-  console.log(similarImagesKDTree.length);
-};
-
-const calcAndLog8 = async () => {
-  const { assets } = await MediaLibrary.getAssetsAsync({
-    first: 1000,
-    mediaType: "photo",
-  });
-
-  const duplicates = await findDuplicatesFlexible(
-    assets.map((asset) => asset.id),
-    {
-      maxCacheSize: 0,
-    }
-  );
-  console.log(JSON.stringify(duplicates, null, 2));
-  console.log(duplicates.length);
-};
-
 const calcAndLog9 = async () => {
   const { assets } = await MediaLibrary.getAssetsAsync({
     first: 1000,
@@ -200,6 +147,71 @@ const calcAndLog9 = async () => {
 };
 
 export default function App() {
+  const [duplicates, setDuplicates] = useState<string[][]>([]);
+
+  const calcAndLog8 = async () => {
+    const { assets } = await MediaLibrary.getAssetsAsync({
+      first: 1000,
+      mediaType: "photo",
+    });
+
+    const duplicates = await findDuplicatesFlexible(
+      assets.map((asset) => asset.id),
+      {
+        maxCacheSize: 0,
+      }
+    );
+    setDuplicates(duplicates);
+    console.log(JSON.stringify(duplicates, null, 2));
+    console.log(duplicates.length);
+  };
+
+  const calcAndLog4 = async () => {
+    const { assets } = await MediaLibrary.getAssetsAsync({
+      first: 1000,
+      mediaType: "photo",
+    });
+
+    const similarImagesKDTree = await findSimilarIterativeKDTreeFlexible(
+      assets.map((asset) => asset.id),
+      {
+        maxCacheSize: 0,
+        nearestK: 10,
+        maxHammingDistance: 10,
+        hashAlgorithmName: "pHash",
+      }
+    );
+
+    setDuplicates(similarImagesKDTree);
+
+    console.log(JSON.stringify(similarImagesKDTree, null, 2));
+    console.log(similarImagesKDTree.length);
+  };
+
+  const calcAndLog7 = async () => {
+    const { assets } = await MediaLibrary.getAssetsAsync({
+      first: 1000,
+      mediaType: "photo",
+    });
+
+    const similarImagesKDTree = await findSimilarConcurrentlyFlexible(
+      assets.map((asset) => asset.id),
+      {
+        maxCacheSize: 0,
+        concurrentBatchSize: 50,
+        maxConcurrent: 100,
+        nearestK: 10,
+        hashAlgorithmName: "pHash",
+        maxHammingDistance: 1,
+      }
+    );
+
+    setDuplicates(similarImagesKDTree);
+
+    console.log(JSON.stringify(similarImagesKDTree, null, 2));
+    console.log(similarImagesKDTree.length);
+  };
+
   useEffect(() => {
     (async () => {
       const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -210,18 +222,35 @@ export default function App() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text>Hello there!</Text>
-      <Button title={"getImagesPHashIterative"} onPress={calcAndLog1}/>
-      <Button title={"getImagesPHashConcurrently"} onPress={calcAndLog2}/>
-      <Button title={"findSimilarIterative"} onPress={calcAndLog3}/>
-      <Button title={"findSimilarIterativeKDTree"} onPress={calcAndLog4}/>
-      <Button title={"findSimilarConcurrentlyPartial"} onPress={calcAndLog5}/>
-      <Button title={"findSimilarConcurrently"} onPress={calcAndLog6}/>
-      <Button title={"findSimilarConcurrentlyFlexible"} onPress={calcAndLog7}/>
-      <Button title={"findDuplicatesFlexible"} onPress={calcAndLog8}/>
-      <Button title={"groupPhotos"} onPress={calcAndLog9}/>
-    </View>
+      <Button title="getImagesPHashIterative" onPress={calcAndLog1} />
+      <Button title="getImagesPHashConcurrently" onPress={calcAndLog2} />
+      <Button title="findSimilarIterative" onPress={calcAndLog3} />
+      <Button title="findSimilarIterativeKDTreeFlexible" onPress={calcAndLog4} />
+      <Button title="findSimilarConcurrentlyPartial" onPress={calcAndLog5} />
+      <Button title="findSimilarConcurrently" onPress={calcAndLog6} />
+      <Button title="findSimilarConcurrentlyFlexible" onPress={calcAndLog7} />
+      <Button title="findDuplicatesFlexible" onPress={calcAndLog8} />
+      <Button title="groupPhotos" onPress={calcAndLog9} />
+
+      <ScrollView style={styles.imagesBlock}>
+        {duplicates.map((duplicate) => (
+          <>
+            <ScrollView horizontal key={JSON.stringify(duplicate)}>
+              {duplicate.map((imageId) => (
+                <Image
+                  key={imageId}
+                  style={styles.image}
+                  source={{ uri: `ph://${imageId}` }}
+                  resizeMode="contain"
+                />
+              ))}
+            </ScrollView>
+          </>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -231,5 +260,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  imagesBlock: {
+    flex: 1,
+  },
+  image: {
+    height: 250,
+    width: 180,
+    margin: 4,
   },
 });

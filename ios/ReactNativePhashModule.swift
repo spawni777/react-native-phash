@@ -118,9 +118,6 @@ class ImagePHashCache<DataType> {
           return
         }
 
-// 		if memoryCache[key] == value {
-// 			return
-// 		}
         memoryCache[key] = value
     }
 
@@ -568,7 +565,7 @@ public class ReactNativePhashModule: Module {
                         guard let imageData = imageData else {
                             // handle error
                             // append the pHash and the index of the corresponding asset to the pHashes array
-                            let tuple: (index: Int, hash: OSHashType?) = (index: batchStartIndex + count, hash: nil)
+                            let tuple: (index: Int, hash: OSHashType?) = (index: imageAppleIds.firstIndex(of: asset.localIdentifier)!, hash: nil)
                             pHashes.append(tuple)
 
                             finishedImageCount = finishedImageCount + 1;
@@ -603,7 +600,7 @@ public class ReactNativePhashModule: Module {
                         }
 
                         // append the pHash and the index of the corresponding asset to the pHashes array
-                        let tuple = (index: batchStartIndex + count, hash: pHash)
+                        let tuple = (index: imageAppleIds.firstIndex(of: asset.localIdentifier)!, hash: pHash)
 
                         finishedImageCount = finishedImageCount + 1;
                         self.sendEvent("pHash-calculated", [
@@ -651,7 +648,7 @@ public class ReactNativePhashModule: Module {
           }
       }
 
-      var pHashes = [String?]()
+      var pHashes = [(String, String?)]()
 
       let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
       var finishedImageCount = 0
@@ -683,7 +680,8 @@ public class ReactNativePhashModule: Module {
 
               guard let imageData = imageData else {
                   // handle error
-                  pHashes.append(nil)
+                  let tuple: (String, String?) = (asset.localIdentifier, nil)
+                  pHashes.append(tuple)
 
                   finishedImageCount = finishedImageCount + 1;
                   self.sendEvent("pHash-calculated", [
@@ -706,7 +704,8 @@ public class ReactNativePhashModule: Module {
               }
 
               // append the pHash and the index of the corresponding asset to the pHashes array
-              pHashes.append(pHash)
+              let tuple = (asset.localIdentifier, pHash)
+              pHashes.append(tuple)
 
               finishedImageCount = finishedImageCount + 1;
               self.sendEvent("pHash-calculated", [
@@ -719,8 +718,12 @@ public class ReactNativePhashModule: Module {
       // squeeze local cache to maxCacheSize elements
       cache.updateUserDefaults()
 
+      // Sort the jumbled array by the index of the corresponding image id in the imageIds array
+      let sortedArray = pHashes.sorted { imageAppleIds.firstIndex(of: $0.0)! < imageAppleIds.firstIndex(of: $1.0)! }
+
+	  let resultPHashes = sortedArray.map { $0.1 }
       // Return an array of pHash values without the index
-      return pHashes
+      return resultPHashes
   }
 
   func calcPHashesStringIterativeFlexible(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, imageQuality: String, contentMode: String, targetSizeWidth: Int, targetSizeHeight: Int) -> [String?] {
@@ -737,7 +740,7 @@ public class ReactNativePhashModule: Module {
           }
       }
 
-      var pHashes = [String?]()
+      var pHashes = [(String, String?)]()
 
       let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
       var finishedImageCount = 0
@@ -785,7 +788,8 @@ public class ReactNativePhashModule: Module {
 
               guard let imageData = imageData else {
                   // handle error
-                  pHashes.append(nil)
+                  let tuple: (String, String?) = (asset.localIdentifier, nil)
+                  pHashes.append(tuple)
 
                   finishedImageCount = finishedImageCount + 1;
                   self.sendEvent("pHash-calculated", [
@@ -808,7 +812,8 @@ public class ReactNativePhashModule: Module {
               }
 
               // append the pHash and the index of the corresponding asset to the pHashes array
-              pHashes.append(pHash)
+              let tuple: (String, String?) = (asset.localIdentifier, pHash)
+              pHashes.append(tuple)
 
               finishedImageCount = finishedImageCount + 1;
               self.sendEvent("pHash-calculated", [
@@ -821,8 +826,12 @@ public class ReactNativePhashModule: Module {
       // squeeze local cache to maxCacheSize elements
       cache.updateUserDefaults()
 
+      // Sort the jumbled array by the index of the corresponding image id in the imageIds array
+      let sortedArray = pHashes.sorted { imageAppleIds.firstIndex(of: $0.0)! < imageAppleIds.firstIndex(of: $1.0)! }
+
+      let resultPHashes = sortedArray.map { $0.1 }
       // Return an array of pHash values without the index
-      return pHashes
+      return resultPHashes
   }
 
   func calcPHashesIterative(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, imageQuality: String) -> [OSHashType?] {
@@ -839,7 +848,7 @@ public class ReactNativePhashModule: Module {
           }
       }
 
-      var pHashes = [OSHashType?]()
+      var pHashes = [(String, OSHashType?)]()
 
       let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
       var finishedImageCount = 0
@@ -871,7 +880,8 @@ public class ReactNativePhashModule: Module {
 
               guard let imageData = imageData else {
                   // handle error
-                  pHashes.append(nil)
+                  let tuple: (String, OSHashType?) = (asset.localIdentifier, nil)
+                  pHashes.append(tuple)
 
                   finishedImageCount = finishedImageCount + 1;
                   self.sendEvent("pHash-calculated", [
@@ -892,7 +902,8 @@ public class ReactNativePhashModule: Module {
               }
 
               // append the pHash and the index of the corresponding asset to the pHashes array
-              pHashes.append(pHash)
+              let tuple: (String, OSHashType?) = (asset.localIdentifier, pHash)
+              pHashes.append(tuple)
 
               finishedImageCount = finishedImageCount + 1;
               self.sendEvent("pHash-calculated", [
@@ -905,8 +916,12 @@ public class ReactNativePhashModule: Module {
       // squeeze local cache to maxCacheSize elements
       cache.updateUserDefaults()
 
+      // Sort the jumbled array by the index of the corresponding image id in the imageIds array
+      let sortedArray = pHashes.sorted { imageAppleIds.firstIndex(of: $0.0)! < imageAppleIds.firstIndex(of: $1.0)! }
+
+      let resultPHashes = sortedArray.map { $0.1 }
       // Return an array of pHash values without the index
-      return pHashes
+      return resultPHashes
   }
 
   func findDuplicatesIterative(imageAppleIds: [String], maxCacheSize: Int, storageIdentifier: String) -> [[String]] {
@@ -960,11 +975,11 @@ public class ReactNativePhashModule: Module {
             }
 
             if (imageHashesMap[hash] == nil) {
-              imageHashesMap[hash] = [imageAppleIds[count]]
+              imageHashesMap[hash] = [asset.localIdentifier]
             } else {
               var appleIds = imageHashesMap[hash]!
 
-              appleIds.append(imageAppleIds[count])
+              appleIds.append(asset.localIdentifier)
               imageHashesMap[hash] = appleIds
             }
 
@@ -1063,11 +1078,11 @@ public class ReactNativePhashModule: Module {
             }
 
             if (imageHashesMap[hash] == nil) {
-              imageHashesMap[hash] = [imageAppleIds[count]]
+              imageHashesMap[hash] = [asset.localIdentifier]
             } else {
               var appleIds = imageHashesMap[hash]!
 
-              appleIds.append(imageAppleIds[count])
+              appleIds.append(asset.localIdentifier)
               imageHashesMap[hash] = appleIds
             }
 
