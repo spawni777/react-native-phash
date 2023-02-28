@@ -1,6 +1,6 @@
 {
   "name": "react-native-phash",
-  "version": "0.1.10",
+  "version": "0.2.1",
   "description": "Generate perceptual hash of image by native ios libs",
   "main": "build/index.js",
   "types": "build/index.d.ts",

@@ -237,6 +237,42 @@ export async function findSimilarIterative(
   });
 }
 
+export type FindSimilarIterativeFlexibleOptions = FindSimilarOptionsUpdated & {
+  contentMode?: "aspectFit" | "aspectFill";
+  targetSizeHeight?: number;
+  targetSizeWidth?: number;
+};
+
+export async function findSimilarIterativeFlexible(
+  imageAppleIds: string | string[],
+  {
+    hashAlgorithmName = "dHash",
+    maxHammingDistance = 5,
+    maxCacheSize = 10000,
+    storageIdentifier = "Spawni-PHash",
+    nearestK = 1,
+    imageQuality = "highQualityFormat",
+    contentMode = "aspectFill",
+    targetSizeHeight = 64,
+    targetSizeWidth = 64,
+  }: FindSimilarIterativeFlexibleOptions = {}
+): Promise<[string, string][]> {
+  const appleIds = imageAppleIds?.length ? imageAppleIds : [imageAppleIds];
+  maxCacheSize = Math.max(0, maxCacheSize);
+
+  return ReactNativePhashModule.findSimilarIterativeFlexible(appleIds, {
+    maxHammingDistance,
+    hashAlgorithmName,
+    maxCacheSize,
+    nearestK,
+    storageIdentifier,
+    imageQuality,
+    contentMode,
+    targetSizeHeight,
+    targetSizeWidth,
+  });
+}
+
 export type FindSimilarKDTreeOptions = FindSimilarOptions & {
   nearestK?: NearestK;
 };
