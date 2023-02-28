@@ -182,6 +182,26 @@ public class ReactNativePhashModule: Module {
   // Each module class must implement the definition function. The definition consists of components
   // that describes the module's functionality and behavior.
   // See https://docs.expo.dev/modules/module-api for more details about available components.
+  func groupPhotos(imageAppleIds: [String]) -> [[String]] {
+      let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: imageAppleIds, options: nil)
+
+      var livePhotos = [String]()
+      var screenshots = [String]()
+      var otherPhotos = [String]()
+
+      fetchResult.enumerateObjects{  (asset, count, stop) in
+        if asset.mediaType == PHAssetMediaType.image && (asset.mediaSubtypes == PHAssetMediaSubtype.photoLive) {
+          livePhotos.append(asset.localIdentifier)
+        } else if asset.mediaType == PHAssetMediaType.image && (asset.mediaSubtypes == PHAssetMediaSubtype.photoScreenshot) {
+          screenshots.append(asset.localIdentifier)
+        } else if asset.mediaType == PHAssetMediaType.image {
+          otherPhotos.append(asset.localIdentifier)
+        }
+      }
+
+      return [livePhotos, screenshots, otherPhotos]
+  }
+
   func calcPHashesStringConcurrently(imageAppleIds: [String], hashAlgorithmName: String, maxCacheSize: Int, storageIdentifier: String, concurrentBatchSize: Int, maxConcurrent: Int, imageQuality: String) -> [String?] {
     let cache = ImagePHashCache<String>(maxCacheSize: maxCacheSize, storageIdentifier: storageIdentifier)
 
@@ -1105,6 +1125,13 @@ public class ReactNativePhashModule: Module {
           imageQuality: options.imageQuality
         );
         return pHashes
+    }
+
+    AsyncFunction("groupPhotos") { (imageAppleIds: [String]) -> [[String]] in
+        let groups = groupPhotos(
+          imageAppleIds: imageAppleIds
+        )
+        return groups
     }
 
     AsyncFunction("findDuplicatesIterative") { (imageAppleIds: [String], options: FindSimilarOptions) -> [[String]] in

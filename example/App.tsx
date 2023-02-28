@@ -11,7 +11,7 @@ import {
   addListener,
   findSimilarConcurrently,
   findSimilarConcurrentlyFlexible,
-  findDuplicatesFlexible,
+  findDuplicatesFlexible, groupPhotos
 } from "react-native-phash";
 
 const pHashCalculatedSubscription = addListener(
@@ -188,6 +188,17 @@ const calcAndLog8 = async () => {
   console.log(duplicates.length);
 };
 
+const calcAndLog9 = async () => {
+  const { assets } = await MediaLibrary.getAssetsAsync({
+    first: 1000,
+    mediaType: "photo",
+  });
+
+  const groups = await groupPhotos(assets.map((asset) => asset.id));
+  console.log(JSON.stringify(groups, null, 2));
+  console.log(groups.length);
+};
+
 export default function App() {
   useEffect(() => {
     (async () => {
@@ -209,6 +220,7 @@ export default function App() {
       <Button title={"findSimilarConcurrently"} onPress={calcAndLog6}/>
       <Button title={"findSimilarConcurrentlyFlexible"} onPress={calcAndLog7}/>
       <Button title={"findDuplicatesFlexible"} onPress={calcAndLog8}/>
+      <Button title={"groupPhotos"} onPress={calcAndLog9}/>
     </View>
   );
 }

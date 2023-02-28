@@ -60,6 +60,19 @@ export function addListener<T extends EventNameEnum>(
   return subscription;
 }
 
+type LivePhotosIds = string[];
+type ScreenshotsIds = string[];
+type OtherPhotosIds = string[];
+type groupedPhotos = [LivePhotosIds, ScreenshotsIds, OtherPhotosIds];
+
+export async function groupPhotos(
+  imageAppleIds: string | string[]
+): Promise<groupedPhotos> {
+  const appleIds = imageAppleIds.length ? imageAppleIds : [imageAppleIds];
+
+  return ReactNativePhashModule.groupPhotos(appleIds);
+}
+
 export type PHashOptions = {
   hashAlgorithmName?: HashAlgorithmName;
   maxCacheSize?: number;
