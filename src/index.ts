@@ -18,9 +18,9 @@ export type NearestK = Range<1, 100>;
 export type MaxHammingDistance = Range<1, 64>;
 export type HashAlgorithmName = "dHash" | "pHash" | "aHash";
 
-type EventNameEnum = "pHash-calculated" | "md5-calculated";
+export type EventNameEnum = "pHash-calculated" | "md5-calculated";
 
-type PHashEvent = {
+export type PHashEvent = {
   finished: number;
   total: number;
 };
@@ -54,16 +54,19 @@ export function addListener<T extends EventNameEnum>(
   listener: (event: ReturnEventMap[T]) => void,
   listenerId: string = makeId(10)
 ): Subscription {
-  const subscription = emitter.addListener<ReturnEventMap[T]>(eventName, listener);
+  const subscription = emitter.addListener<ReturnEventMap[T]>(
+    eventName,
+    listener
+  );
 
   subscriptions[listenerId] = subscription;
   return subscription;
 }
 
-type LivePhotosIds = string[];
-type ScreenshotsIds = string[];
-type OtherPhotosIds = string[];
-type groupedPhotos = [LivePhotosIds, ScreenshotsIds, OtherPhotosIds];
+export type LivePhotosIds = string[];
+export type ScreenshotsIds = string[];
+export type OtherPhotosIds = string[];
+export type groupedPhotos = [LivePhotosIds, ScreenshotsIds, OtherPhotosIds];
 
 export async function groupPhotos(
   imageAppleIds: string | string[]
@@ -118,7 +121,7 @@ export async function findDuplicates(
   });
 }
 
-type DuplicatesFlexibleOptions = HashOptions & {
+export type DuplicatesFlexibleOptions = HashOptions & {
   contentMode?: "aspectFit" | "aspectFill";
   targetSizeHeight?: number;
   targetSizeWidth?: number;
@@ -234,7 +237,7 @@ export async function findSimilarIterative(
   });
 }
 
-type FindSimilarKDTreeOptions = FindSimilarOptions & {
+export type FindSimilarKDTreeOptions = FindSimilarOptions & {
   nearestK?: NearestK;
 };
 
@@ -262,7 +265,7 @@ export async function findSimilarIterativeKDTree(
   });
 }
 
-type FindSimilarKDTreeFlexibleOptions = FindSimilarKDTreeOptions & {
+export type FindSimilarKDTreeFlexibleOptions = FindSimilarKDTreeOptions & {
   contentMode?: "aspectFit" | "aspectFill";
   targetSizeHeight?: number;
   targetSizeWidth?: number;
@@ -298,7 +301,7 @@ export async function findSimilarIterativeKDTreeFlexible(
   });
 }
 
-type FindSimilarConcurrentlyOptions = FindSimilarKDTreeOptions & {
+export type FindSimilarConcurrentlyOptions = FindSimilarKDTreeOptions & {
   concurrentBatchSize?: number;
   maxConcurrent?: number;
 };
@@ -393,11 +396,12 @@ export async function findSimilarConcurrently(
   });
 }
 
-type FindSimilarConcurrentlyFlexibleOptions = FindSimilarConcurrentlyOptions & {
-  contentMode?: "aspectFit" | "aspectFill";
-  targetSizeHeight?: number;
-  targetSizeWidth?: number;
-};
+export type FindSimilarConcurrentlyFlexibleOptions =
+  FindSimilarConcurrentlyOptions & {
+    contentMode?: "aspectFit" | "aspectFill";
+    targetSizeHeight?: number;
+    targetSizeWidth?: number;
+  };
 
 export async function findSimilarConcurrentlyFlexible(
   imageAppleIds: string | string[],
